@@ -5,6 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./com
 import {Label} from "./components/ui/Label"
 import { Input } from "./components/ui/Input"
 import { Button } from "./components/ui/Button"
+
+//creacion de usuarios falsos para el login
+const fakeUsers = [
+  { username: "noe", password: "1234" },
+  { username: "shei", password: "abcd" },
+]
+
 function App() {
   //se crea un estado para manejar el login
   //y otro para manejar las credenciales del usuario
@@ -14,6 +21,7 @@ function App() {
   //setIsLoggedIn y setCredentials son funciones para actualizar el estado
   
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [error, setError] = useState("")
   const [credentials, setCredentials] = useState({ username: '', password: '' })
 
   //handleLogin es una funcion que se ejecuta cuando el usuario intenta loguearse
@@ -22,9 +30,21 @@ function App() {
   //si son correctos, actualiza el estado isLoggedIn a true
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    if (credentials.username && credentials.password) {
+
+     // Buscar si existe el usuario
+    const user = fakeUsers.find(
+      (u) => u.username === credentials.username && u.password === credentials.password
+    )
+
+    if (user) {
       setIsLoggedIn(true)
+      setError("")
+    } else {
+      setError("Usuario o contraseña incorrectos")
     }
+    /*if (credentials.username && credentials.password) {
+      setIsLoggedIn(true)
+    }*/
     
   }
 
@@ -66,6 +86,7 @@ function App() {
                 required
               />
             </div>
+            {error && <p className="text-red-500 text-sm">{error}</p>}
             <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white">
               Iniciar Sesión
             </Button>
