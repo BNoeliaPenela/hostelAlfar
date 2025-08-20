@@ -1,9 +1,8 @@
 import { useState } from "react"
 import { Card, CardContent } from "./ui/Card"
 import { Button } from "./ui/Button"
-
-
 import { Bed, User } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/Dialog"
 
 type BedStatus = "libre" | "ocupada" | "limpieza" | "proceso" 
 
@@ -55,7 +54,40 @@ export function BedsSection() {
         return initialBeds
     })
 
+    //Se declara un estado llamado selectedBed.
+    //El tipo es BedData | null, o sea, puede ser un objeto con los datos de una cama o null si no hay ninguna seleccionada.
+    const [selectedBed, setSelectedBed] = useState<BedData | null>(null)
+    const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+    //Sirve para manejar si el diálogo/modal de información está abierto o cerrado.
+    const handleBedClick = (bed: BedData) => {
+    setSelectedBed(bed)
+    setIsDialogOpen(true)
+    }
+
+    //Sirve para cambiar el estado de una cama seleccionada.
+    //Recibe un nuevo estado (newStatus) y actualiza la cama seleccionada con ese nuevo estado.
+    const handleStatusChange = (newStatus: string) => {
+        if (selectedBed) {
+            const status = newStatus as BedStatus
+            setBeds(
+                beds.map((bed) =>
+                bed.id === selectedBed.id ? { ...bed, status, guest: status !== "ocupada" ? undefined : bed.guest } : bed,
+                ),
+            )
+        setSelectedBed({ ...selectedBed, status })
+        }
+    }
     
+    //getStatusCount sirve para contar cuántas camas hay en un estado específico dentro de todo el listado de beds.
+    const getStatusCount = (status: BedStatus) => {
+        return beds.filter((bed) => bed.status === status).length
+    }
+
     
+
+
+
+
 
 }
