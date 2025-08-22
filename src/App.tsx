@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./com
 import {Label} from "./components/ui/Label"
 import { Input } from "./components/ui/Input"
 import { Button } from "./components/ui/Button"
+import { Dashboard } from "./components/Dashboard"
+
 
 //creacion de usuarios falsos para el login
 const fakeUsers = [
@@ -49,11 +51,9 @@ function App() {
   }
 
   if (isLoggedIn) {
-    return ( //aca deberia retornar el dashboard.
-      <div className="flex items-center justify-center h-screen bg-gray-100">
-        <h1 className="text-2xl font-bold">Bienvenido al Hostel Alfar</h1>
-      </div>
-    )
+    //aca deberia retornar el dashboard.
+    return <Dashboard />
+    
   }
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-200 to-indigo-100 flex items-center justify-center p-4">
