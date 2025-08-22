@@ -132,12 +132,12 @@ export function BedsSection() {
                     </DialogHeader>
                     <div className="space-y-4 p-6">
                         <div>
-                            <label className="text-sm font-medium">Estado Actual:</label>
+                            <label className="text-sm font-medium bg-gray-50">Estado Actual:</label>
                             <Select value={selectedBed?.status} onValueChange={handleStatusChange}>
                                 <SelectTrigger className="mt-1">
                                 <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-gray-50">
                                 <SelectItem value="libre">Libre</SelectItem>
                                 <SelectItem value="ocupada">Ocupada</SelectItem>
                                 <SelectItem value="limpieza">Para Limpiar</SelectItem>
@@ -147,7 +147,7 @@ export function BedsSection() {
                         </div>
 
                         {selectedBed?.guest && (
-                        <div className="bg-gray-50 p-4 rounded-lg">
+                        <div className="bg-gray-200 p-4 rounded-lg">
                             <h4 className="font-medium mb-2">Huésped Actual:</h4>
                             <p>
                             <strong>Nombre:</strong> {selectedBed.guest.name}

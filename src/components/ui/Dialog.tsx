@@ -45,7 +45,7 @@ function DialogContent({ className, children, ...props }: React.HTMLAttributes<H
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
       <div
-        className={cn("relative z-50 w-full max-w-lg mx-4 bg-background rounded-lg shadow-lg", className)}
+        className={cn("relative z-50 w-full max-w-lg mx-4 bg-background rounded-lg shadow-lg bg-gray-50 ", className)}
         {...props}
       >
         <button
@@ -61,7 +61,7 @@ function DialogContent({ className, children, ...props }: React.HTMLAttributes<H
 }
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left p-6 pb-0", className)} {...props} />
+  return <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left p-6 pb-0 bg-gray-50 ", className)} {...props} />
 }
 
 function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
