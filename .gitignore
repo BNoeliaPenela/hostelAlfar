@@ -1,24 +1,47 @@
-# Logs
-logs
-*.log
+# --- Dependencias ---
+node_modules/
+
+# --- Builds ---
+dist/
+build/
+
+# --- Archivos de entorno ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Archivos de log ---
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# --- Cachés ---
+.eslintcache
+.cache/
+.vite/
+*.tsbuildinfo
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# --- Cobertura de tests ---
+coverage/
+
+# --- Archivos del editor ---
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# --- Archivos del sistema operativo ---
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+Thumbs.db
+
+# --- Archivos comprimidos o empaquetados ---
+*.tgz
+
+# --- Locks (opcional, según tu equipo) ---
+# Si quieren versiones exactas de dependencias, no ignores estos
+#package-lock.json
+#yarn.lock
+#pnpm-lock.yaml
