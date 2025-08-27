@@ -16,6 +16,7 @@ function App() {
       {/* Layout principal con Sidebar */}
       <Route path="/home" element={<HomePage />}>
         <Route index element={<BedsSection />} />   {/* 👈 ruta inicial */}
+        <Route path="camas" element={<BedsSection />} />  
         <Route path="reservas" element={<ReservationPage />} />
         <Route path="calendario" element={<CalendarPage />} />
         <Route path="huespedes" element={<GuestsPage />} />
@@ -23,7 +24,7 @@ function App() {
       </Route>
 
       {/* Redirección por defecto */}
-      <Route path="*" element={<Navigate to="/home" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }
