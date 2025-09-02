@@ -1,12 +1,12 @@
 // src/App.tsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import HomePage from "./pages/HomePage";
-import ReservationPage from "./pages/ReservationPage";
-import CalendarPage from "./pages/CalendarPage";
-import GuestsPage from "./pages/GuestsPage";
-import ReportsPage from "./pages/ReportsPage";
-import LoginPage from "./pages/LoginPage";
-import { BedsSection } from "./components/BedsSection";
+import ReservationPage from "./features/reservations/ReservationPage";
+import CalendarPage from "./features/calendar/CalendarPage";
+import GuestsPage from "./features/guests/GuestsPage";
+import ReportsPage from "./features/reports/ReportsPage";
+import LoginPage from "./features/auth/LoginPage";
+import { BedsPage } from "./features/beds/BedsPage";
 
 function App() {
   return (
@@ -15,8 +15,8 @@ function App() {
 
       {/* Layout principal con Sidebar */}
       <Route path="/home" element={<HomePage />}>
-        <Route index element={<BedsSection />} />   {/* 👈 ruta inicial */}
-        <Route path="camas" element={<BedsSection />} />  
+        <Route index element={<BedsPage />} />   {/* 👈 ruta inicial */}
+        <Route path="camas" element={<BedsPage />} />  
         <Route path="reservas" element={<ReservationPage />} />
         <Route path="calendario" element={<CalendarPage />} />
         <Route path="huespedes" element={<GuestsPage />} />
