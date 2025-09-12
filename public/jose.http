@@ -1,0 +1,37 @@
+@access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU3NjE5MjAxLCJpYXQiOjE3NTc2MTc2NDYsImp0aSI6ImQwM2U3MWNmZmFiZjRjN2ViMWQxYzBiZDNhYzI5NjNkIiwidXNlcl9pZCI6Mn0.9KH3qffN2tTtIQMdwrDb5wYc22aWmfqY6-nHzzzDj3U
+@refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc1NzcwNDA0NiwiaWF0IjoxNzU3NjE3NjQ2LCJqdGkiOiJmMWVjMWI5NjkxYzk0MzFhYmM5ZTcyZGJlY2Y1ODYwZiIsInVzZXJfaWQiOjJ9.K-KIWeQfFLBeUz4eMwBTOlHnEbP5mW7K6K-Xso_J_s8
+@host=http://localhost:8000
+
+
+### log-in
+POST http://localhost:8000/api/login/
+Content-Type: application/json
+
+{ "username": "alfarhostel", "password": "djangoalfar" }
+
+
+### refresh
+POST {{host}}/api/refresh/
+Content-Type: application/json
+
+{"refresh":"{{refresh}}"}
+
+
+### get-cliente
+GET {{host}}/api/v1/clientes/
+Authorization: Bearer {{access}}
+
+
+### crear cliente
+POST {{host}}/api/v1/clientes/
+Authorization: Bearer {{access}}
+Content-Type: application/json
+
+{
+    "nombre": "sheila",
+    "apellido": "balmaceda",
+    "documento": "44692776",
+    "telefono": "2236059934",
+    "direccion": "casa",
+    "patente": "ABC143"
+  }
