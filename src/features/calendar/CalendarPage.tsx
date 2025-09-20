@@ -10,7 +10,7 @@ import {
   getDay,
 } from "date-fns";
 import { es } from "date-fns/locale";
-import Modal from "../components/ui/Modal";
+import Modal from "../../components/ui/Modal";
 
 type Reservation = { name: string; bed: number; from: string; to: string };
 type DayData = {
