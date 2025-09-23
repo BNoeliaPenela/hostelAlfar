@@ -1,79 +1,57 @@
 // src/pages/CalendarPage.tsx
-import React, { useState } from "react";
-import {
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  format,
-  isBefore,
-  isSameDay,
+import React, { useState, useEffect } from "react";
+import { 
+  startOfMonth, 
+  endOfMonth, 
+  eachDayOfInterval, 
+  format, 
+  isBefore, 
+  isSameDay, 
   getDay,
+  parseISO, // Importamos para formatear las fechas de reserva
 } from "date-fns";
 import { es } from "date-fns/locale";
 import Modal from "../../components/ui/Modal";
+import { calendarService } from "./services/calendarService";
 
+// Actualizamos el tipo Reservation para que refleje la información del cliente
+// asumiendo que el backend ahora devuelve un objeto de cliente en lugar de un ID
 type Reservation = { name: string; bed: number; from: string; to: string };
-type DayData = {
-  date: string;
-  occupied: number;
-  total: number;
-  reservations?: Reservation[];
-};
-
-// ---------- MOCK (ejemplos) ----------
-const mockMap: Record<string, DayData> = {
-  // Ejemplos
-  "2025-09-14": {
-    date: "2025-09-14",
-    occupied: 20,
-    total: 24,
-    reservations: [
-      { name: "José Fan", bed: 1, from: "21/06", to: "26/06" },
-      { name: "Luis Miguel", bed: 2, from: "20/06", to: "26/06" },
-      { name: "José Fan", bed: 1, from: "21/06", to: "26/06" },
-      { name: "Luis Miguel", bed: 2, from: "20/06", to: "26/06" },
-      { name: "José Fan", bed: 1, from: "21/06", to: "29/09" },
-      { name: "Luis Miguel", bed: 2, from: "20/06", to: "26/06" },
-      { name: "José Fan", bed: 1, from: "21/06", to: "26/06" },
-      { name: "Luis Miguel", bed: 2, from: "20/06", to: "26/06" },
-      { name: "José Fan", bed: 1, from: "21/06", to: "26/06" },
-      { name: "Luis Miguel", bed: 2, from: "20/06", to: "26/06" },
-    ],
-  },
-
-  // Ejemplos [marca amarillo a las 12 camas]
-  "2025-10-28": {
-    date: "2025-10-28",
-    occupied: 24,
-    total: 24,
-    reservations: [{ name: "Ana Pérez", bed: 7, from: "27/08", to: "30/08" }],
-  },
-};
+type DayData = { date: string; occupied: number; total: number; reservations?: Reservation[]; };
 
 const weekDays = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-
 const CalendarPage: React.FC = () => {
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // normalizado a 00:00
-
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [selectedDay, setSelectedDay] = useState<DayData | null>(null);
+  const [reservationsMap, setReservationsMap] = useState<Record<string, DayData>>({});
 
-  // límites del mes visible
   const firstDay = startOfMonth(new Date(currentYear, currentMonth));
   const lastDay = endOfMonth(new Date(currentYear, currentMonth));
   const daysInMonth = eachDayOfInterval({ start: firstDay, end: lastDay });
-
-  // cuántos “huecos” van antes del día 1 para alinear columnas
-  const startWeekday = getDay(firstDay); // 0=Dom ... 6=Sáb
+  const startWeekday = getDay(firstDay);
   const leadingSlots = Array.from({ length: startWeekday });
-
-  // para cerrar la última semana
   const totalCells = startWeekday + daysInMonth.length;
   const trailingSlots = (7 - (totalCells % 7)) % 7;
 
-  // cambia de mes calculando un Date intermedio (sin leer estados “viejos”)
+  // Función para recargar los datos del calendario
+  const fetchAndMapReservations = async () => {
+    try {
+      const reservations = await calendarService.fetchReservations();
+      const map = calendarService.mapReservationsByDay(reservations, 24);
+      setReservationsMap(map);
+    } catch (err) {
+      console.error("Error cargando reservas:", err);
+    }
+  };
+
+  useEffect(() => {
+    // Se ejecuta una vez al montar el componente
+    fetchAndMapReservations();
+  }, []);
+
   const changeMonth = (dir: "prev" | "next") => {
     const delta = dir === "next" ? 1 : -1;
     const newDate = new Date(currentYear, currentMonth + delta, 1);
@@ -83,37 +61,32 @@ const CalendarPage: React.FC = () => {
 
   const getStatusColor = (occupied: number, total: number) => {
     const ratio = occupied / total;
-    if (ratio === 1) return "bg-red-500 text-white"; // completo
-    if (ratio >= 0.5) return "bg-yellow-300"; // medio
-    return "bg-green-300"; // bajo
+    if (ratio === 1) return "bg-red-500 text-white";
+    if (ratio >= 0.5) return "bg-yellow-300";
+    return "bg-green-300";
   };
 
   const getDayData = (d: Date): DayData | null => {
     const key = format(d, "yyyy-MM-dd");
-    return mockMap[key] ?? null;
+    return reservationsMap[key] ?? null;
   };
 
   return (
     <div className="p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <button
-          className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
-          onClick={() => changeMonth("prev")}
-        >
+        <button className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300" onClick={() => changeMonth("prev")}>
           ←
         </button>
         <h1 className="text-2xl font-semibold">
           {format(firstDay, "MMMM yyyy", { locale: es })}
         </h1>
-        <button
-          className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
-          onClick={() => changeMonth("next")}
-        >
-          →
-        </button>
+        <div className="flex space-x-2">
+          <button className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300" onClick={() => changeMonth("next")}>
+            →
+          </button>
+        </div>
       </div>
-
       {/* Cabecera de días */}
       <div className="grid grid-cols-7 mb-2">
         {weekDays.map((w) => (
@@ -122,26 +95,16 @@ const CalendarPage: React.FC = () => {
           </div>
         ))}
       </div>
-
       {/* Celdas del calendario */}
       <div className="grid grid-cols-7 gap-3">
-        {/* Huecos previos */}
         {leadingSlots.map((_, i) => (
           <div key={`empty-start-${i}`} />
         ))}
-
-        {/* Días reales */}
         {daysInMonth.map((day) => {
           const isPast = isBefore(day, today) && !isSameDay(day, today);
           const data = getDayData(day);
-          const baseClasses =
-            "h-20 rounded-lg flex flex-col items-center justify-center shadow";
-
-          const classes = isPast
-            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-            : data
-            ? getStatusColor(data.occupied, data.total)
-            : "bg-green-200";
+          const baseClasses = "h-20 rounded-lg flex flex-col items-center justify-center shadow";
+          const classes = isPast ? "bg-gray-300 text-gray-500 cursor-not-allowed" : data ? getStatusColor(data.occupied, data.total) : "bg-green-200";
 
           return (
             <button
@@ -166,54 +129,45 @@ const CalendarPage: React.FC = () => {
             </button>
           );
         })}
-
-        {/* Huecos finales */}
         {Array.from({ length: trailingSlots }).map((_, i) => (
           <div key={`empty-end-${i}`} />
         ))}
       </div>
-
-      {/* Modal */}
+      {/* Modal de detalles del día */}
       <Modal isOpen={!!selectedDay} onClose={() => setSelectedDay(null)}>
         {selectedDay && (
           <div>
-            <h2 className="text-lg font-semibold mb-2">
-              Detalles del {format(new Date(selectedDay.date), "dd/MM/yy")}
-            </h2>
-            <p className="mb-4">
-              Ocupación: {selectedDay.occupied}/{selectedDay.total} camas
-            </p>
-
+            <h2 className="text-lg font-semibold mb-2"> Detalles del {format(new Date(selectedDay.date), "dd/MM/yy")} </h2>
+            <p className="mb-4"> Ocupación: {selectedDay.occupied}/{selectedDay.total} camas </p>
             {selectedDay.reservations && selectedDay.reservations.length > 0 ? (
               <div className="max-h-60 overflow-y-auto pr-6 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
-              <ul className="space-y-2">
-                {selectedDay.reservations.map((r, idx) => (
-                  <li
-                    key={idx}
-                    className="flex justify-between items-center border p-2 rounded-md"
-                  >
-                    <div>
-                      <p className="font-medium">{r.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {r.from} - {r.to}
-                      </p>
-                    </div>
-                    <span className="px-2 py-1 text-sm bg-gray-200 rounded">
-                      Cama {r.bed}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            
+                <ul className="space-y-2">
+                  {selectedDay.reservations.map((r, idx) => (
+                    <li key={idx} className="flex flex-col justify-start border p-3 rounded-md">
+                      <div className="flex justify-between items-center w-full mb-1">
+                        <p className="font-medium text-lg">{r.name}</p>
+                        <span className="px-2 py-1 text-sm bg-gray-200 rounded">
+                          Cama {r.bed}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">
+                          <span className="font-semibold">Check-in:</span>{" "}
+                          {format(parseISO(r.from.replace(' ', 'T')), 'dd/MM HH:mm', { locale: es })}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          <span className="font-semibold">Check-out:</span>{" "}
+                          {format(parseISO(r.to.replace(' ', 'T')), 'dd/MM HH:mm', { locale: es })}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : (
               <p className="text-gray-500">No hay reservas activas</p>
             )}
-
-            <button
-              onClick={() => setSelectedDay(null)}
-              className="mt-4 w-full bg-gray-800 text-white py-2 rounded-lg hover:bg-gray-900"
-            >
+            <button onClick={() => setSelectedDay(null)} className="mt-4 w-full bg-gray-800 text-white py-2 rounded-lg hover:bg-gray-900">
               Cerrar
             </button>
           </div>

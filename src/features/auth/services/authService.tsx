@@ -1,6 +1,6 @@
-
+// src/services/authService.ts
 import axios from "axios";
-import apiClient, { setTokens, clearTokens } from "../../../lib/apiClient";
+import { setTokens, clearTokens } from "../../../lib/apiClient"; // Asegúrate de que la ruta sea correcta
 
 const BASE_URL = "http://localhost:8000"; 
 
@@ -33,7 +33,10 @@ export const authService = {
     clearTokens();
   },
 
-  isAuthenticated: () => {
-    return Boolean(localStorage.getItem("access")); 
+  isAuthenticated: (): boolean => {
+    // Lee el accessToken desde el localStorage, usando la clave correcta.
+    // Una verificación más robusta sería verificar también el token de refresco.
+    const accessToken = localStorage.getItem("accessToken");
+    return Boolean(accessToken);
   },
 };

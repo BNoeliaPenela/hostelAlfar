@@ -2,55 +2,46 @@
 import axios from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 
-
 const BASE_URL = "http://localhost:8000/api/v1/";
-
-let accessToken: string | null = null;
-let refreshToken: string | null = null;
 let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// --- crear instancia de axios ---
 const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   headers: {
-    "Content-Type": "application/json", 
+    "Content-Type": "application/json",
   },
 });
 
-// --- agregar token en cada request ---
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const accessToken = localStorage.getItem("accessToken");
   if (accessToken && config.headers) {
     config.headers["Authorization"] = `Bearer ${accessToken}`;
   }
   return config;
 });
 
-// --- setear tokens y programar refresh ---
-export function setTokens(access: string, refresh: string) {
-  accessToken = access;
-  refreshToken = refresh;
-  if (refreshTimeout) clearTimeout(refreshTimeout);
+// REMOVED: El interceptor de respuesta que manejaba los errores 401.
 
-  // programar refresh 5 min después
+export function setTokens(access: string, refresh: string) {
+  localStorage.setItem("accessToken", access);
+  localStorage.setItem("refreshToken", refresh);
+
+  if (refreshTimeout) clearTimeout(refreshTimeout);
   refreshTimeout = setTimeout(refreshAccessToken, 5 * 60 * 1000);
 }
 
-// --- limpiar tokens ---
 export function clearTokens() {
-  accessToken = null;
-  refreshToken = null;
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
   if (refreshTimeout) clearTimeout(refreshTimeout);
 }
 
-// --- refresh token ---
 async function refreshAccessToken() {
+  const refreshToken = localStorage.getItem("refreshToken");
   if (!refreshToken) return;
-
   try {
-    const response = await axios.post("http://localhost:8000/api/refresh/", {
-      refresh: refreshToken,
-    });
-    const { access } = response.data as { access: string }; // 👈 tipamos para evitar error "unknown"
+    const response = await axios.post("http://localhost:8000/api/refresh/", { refresh: refreshToken });
+    const { access } = response.data as { access: string };
     if (access) {
       setTokens(access, refreshToken);
     }
