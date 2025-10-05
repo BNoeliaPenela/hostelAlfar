@@ -29,6 +29,8 @@ interface ReservationFormProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   onCreateReservation: () => void
+  selectedBed: number
+  selectBed: (bedNum: number) => void
   checkInDate: string
   setCheckInDate: (date: string) => void
   checkOutDate: string
@@ -53,6 +55,8 @@ export function ReservationForm({
   isOpen,
   onOpenChange,
   onCreateReservation,
+  selectedBed,
+  selectBed,
   checkInDate,
   setCheckInDate,
   checkOutDate,
@@ -115,7 +119,12 @@ export function ReservationForm({
               <Label>Camas Disponibles</Label>
               <div className="grid grid-cols-6 gap-2 mt-2">
                 {availableBeds.map((bedNum) => (
-                  <Button key={bedNum} variant="outline" size="sm">
+                  <Button
+                    key={bedNum}
+                    variant={selectedBed === bedNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => selectBed(bedNum)}
+                  >
                     Cama {bedNum}
                   </Button>
                 ))}

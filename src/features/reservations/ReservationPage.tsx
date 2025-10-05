@@ -21,7 +21,9 @@ export default function ReservationPage() {
     updateGuest,
     toggleAmenity,
     availableBeds,
-    addReservation, // Nuevo handler para crear reserva
+    addReservation,
+    setSelectedBed,
+    selectedBed // Nuevo handler para crear reserva
   } = useReservations()
 
   const formatDate = (date: Date) => date.toLocaleDateString("es-ES")
@@ -33,9 +35,9 @@ export default function ReservationPage() {
       guestName: guests.map(g => g.name).join(", "),
       checkIn: new Date(checkInDate),
       checkOut: new Date(checkOutDate),
-      bedNumber: 0,
+      bedNumber: selectedBed,
       status: "activa",
-      guests: 0
+      guests: guests.length
     });
     setIsNewReservationOpen(false);
     // Opcional: limpia los campos si quieres
@@ -70,7 +72,9 @@ export default function ReservationPage() {
         updateGuest={updateGuest}
         toggleAmenity={toggleAmenity}
         availableBeds={availableBeds}
-        onCreateReservation={handleCreateReservation} // Pasamos el handler al formulario
+        onCreateReservation={handleCreateReservation}
+        selectedBed={selectedBed}         // <-- valor actual
+        selectBed={setSelectedBed}        // <-- función para cambiar cama
       />
     </div>
   )

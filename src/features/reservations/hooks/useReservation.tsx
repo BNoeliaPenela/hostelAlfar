@@ -22,7 +22,8 @@ export function useReservations() {
     },
   ])
   const [availableBeds] = useState<number[]>([1, 3, 7, 9, 11, 15, 18, 21, 23])
-
+  const [selectedBed, setSelectedBed] = useState<number>(0);
+  const selectBed = (bedNum: number) => setSelectedBed(bedNum);
   // Nuevo método para agregar una reserva
   const addReservation = (reservation: reservation) => {
   setReservations(prev => [...prev, { ...reservation, id: Date.now() }]);
@@ -86,5 +87,9 @@ export function useReservations() {
     toggleAmenity,
     availableBeds,
     addReservation,
+    selectBed,
+    selectedBed,
+    setSelectedBed
+
   }
 }
