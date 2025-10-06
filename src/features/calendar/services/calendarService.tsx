@@ -4,7 +4,7 @@ import apiClient from "../../../lib/apiClient";
 
 export interface Reservation {
   id: number;
-  cliente: string;
+  cliente_nombre: string;
   cama: number;
   check_in: string; // formato "YYYY-MM-DD HH:MM"
   check_out: string;
@@ -57,7 +57,7 @@ export const calendarService = {
         // Sumamos la ocupación y agregamos la reserva
         map[dateKey].occupied += 1;
         map[dateKey].reservations.push({
-          name: r.cliente,
+          name: r.cliente_nombre,
           bed: r.cama,
           from: r.check_in,
           to: r.check_out,
