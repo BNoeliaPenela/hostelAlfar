@@ -20,6 +20,7 @@ export default function ReservationPage() {
     guests,
     updateGuest,
     toggleAmenity,
+    removeGuest,
     availableBeds,
     addReservation,
     setSelectedBed,
@@ -71,6 +72,7 @@ export default function ReservationPage() {
         guests={guests}
         updateGuest={updateGuest}
         toggleAmenity={toggleAmenity}
+        removeGuest={removeGuest}
         availableBeds={availableBeds}
         onCreateReservation={handleCreateReservation}
         selectedBed={selectedBed}         // <-- valor actual

@@ -72,6 +72,18 @@ export function useReservations() {
     setGuests(updatedGuests)
   }
 
+  const removeGuest = (index: number) => {
+    setGuests((prevGuests) => {
+      if (prevGuests.length <= 1) {
+        return prevGuests
+      }
+
+      const updatedGuests = prevGuests.filter((_, i) => i !== index)
+      setGuestCount(updatedGuests.length)
+      return updatedGuests
+    })
+  }
+
   return {
     reservations,
     isNewReservationOpen,
@@ -85,6 +97,7 @@ export function useReservations() {
     guests,
     updateGuest,
     toggleAmenity,
+    removeGuest,
     availableBeds,
     addReservation,
     selectBed,

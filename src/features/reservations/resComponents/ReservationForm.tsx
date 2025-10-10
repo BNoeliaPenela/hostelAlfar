@@ -40,6 +40,7 @@ interface ReservationFormProps {
   guests: GuestData[]
   updateGuest: (index: number, field: keyof GuestData, value: any) => void
   toggleAmenity: (guestIndex: number, amenity: string) => void
+  removeGuest: (index: number) => void
   availableBeds: number[]
 }
 
@@ -66,6 +67,7 @@ export function ReservationForm({
   guests,
   updateGuest,
   toggleAmenity,
+  removeGuest,
   availableBeds,
 }: ReservationFormProps) {
   return (
@@ -143,12 +145,7 @@ export function ReservationForm({
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        const newGuests = guests.filter((_, i) => i !== index)
-                        // Actualiza estado en el hook que llama a este componente
-                        // Aquí solo se emite el evento, la lógica queda afuera
-                        // Por eso no se hace setGuests aquí
-                        // En el hook se debe manejar esta función
-                        // Para simplificar, puedes pasar una función prop para eliminar huésped
+                        removeGuest(index)
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
