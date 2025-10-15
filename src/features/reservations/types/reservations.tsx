@@ -1,11 +1,12 @@
 export interface reservation {
   id: number
-  guestName: string
   checkIn: Date
   checkOut: Date
-  bedNumber: number
-  status: "activa" | "completada" | "cancelada"
+  status: "activa" | "completada" | "cancelada" | "en_progreso"
   guests: number
+  guestDetails: GuestData[]
+  realCheckInDateTime?: Date | null  // Fecha/hora real del check-in
+  realCheckOutDateTime?: Date | null  // Fecha/hora real del check-out
 }
 export interface GuestData {
   name: string
@@ -17,4 +18,10 @@ export interface GuestData {
   notes: string
   amenities: string[]
   breakfast: boolean
+  bedNumber: number | null
+}   
+
+export interface AvailableBed {
+  bedNumber: number
+  isAvailable: boolean
 }

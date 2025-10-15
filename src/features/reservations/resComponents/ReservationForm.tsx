@@ -22,15 +22,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/Select"
-import { Trash2 } from "lucide-react"
+import { Badge } from "../../../components/ui/Badge"
+import { AlertCircle, Bed, Calendar, CheckCircle2, Loader2, Trash2 } from "lucide-react"
 import type { GuestData } from "../types/reservations"
 
 interface ReservationFormProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
-  onCreateReservation: () => void
-  selectedBed: number
-  selectBed: (bedNum: number) => void
+  onSaveReservation: () => void
+  isEditMode: boolean
   checkInDate: string
   setCheckInDate: (date: string) => void
   checkOutDate: string
@@ -41,6 +41,9 @@ interface ReservationFormProps {
   updateGuest: (index: number, field: keyof GuestData, value: any) => void
   toggleAmenity: (guestIndex: number, amenity: string) => void
   availableBeds: number[]
+  getAvailableBedsForGuest: (guestIndex: number) => number[]
+  loading: boolean
+  loadingBeds: boolean
 }
 
 const amenitiesList = [
@@ -54,9 +57,8 @@ const amenitiesList = [
 export function ReservationForm({
   isOpen,
   onOpenChange,
-  onCreateReservation,
-  selectedBed,
-  selectBed,
+  onSaveReservation,
+  isEditMode,
   checkInDate,
   setCheckInDate,
   checkOutDate,
@@ -67,102 +69,200 @@ export function ReservationForm({
   updateGuest,
   toggleAmenity,
   availableBeds,
+  getAvailableBedsForGuest,
+  loading,
+  loadingBeds,
 }: ReservationFormProps) {
+
+  const isFormValid = () => {
+    return checkInDate && 
+           checkOutDate && 
+           guests.every(g => g.bedNumber !== null && g.name && g.lastName && g.dni)
+  }
+  const assignedBedsCount = guests.filter(g => g.bedNumber !== null).length
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nueva Reserva</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            {isEditMode ? "Editar Reserva" : "Nueva Reserva"}
+          </DialogTitle>
         </DialogHeader>
-
+      
+    
         <div className="space-y-6 p-6">
           {/* Fechas */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Check-in</Label>
-              <Input
-                type="date"
-                value={checkInDate}
-                onChange={(e) => setCheckInDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Check-out</Label>
-              <Input
-                type="date"
-                value={checkOutDate}
-                onChange={(e) => setCheckOutDate(e.target.value)}
-              />
-            </div>
-          </div>
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardContent className="pt-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-blue-900">Check-in *</Label>
+                  <Input
+                    type="date"
+                    value={checkInDate}
+                    onChange={(e) => setCheckInDate(e.target.value)}
+                    required
+                    className="bg-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-blue-900">Check-out *</Label>
+                  <Input
+                    type="date"
+                    value={checkOutDate}
+                    onChange={(e) => setCheckOutDate(e.target.value)}
+                    min={checkInDate}
+                    required
+                    className="bg-white"
+                  />
+                </div>
+              </div>
+
+          {/* Mostrar camas disponibles */}
+              {loadingBeds && (
+                <div className="flex items-center gap-2 text-blue-700">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Cargando camas disponibles...</span>
+                </div>
+              )}
+
+              {!loadingBeds && checkInDate && checkOutDate && availableBeds.length > 0 && (
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Camas disponibles para estas fechas: {availableBeds.length}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {availableBeds.map(bed => (
+                      <Badge key={bed} variant="outline" className="text-xs">
+                        {bed}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!loadingBeds && checkInDate && checkOutDate && availableBeds.length === 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+                  <p className="text-sm text-amber-800">
+                    No hay camas disponibles para estas fechas. Prueba con otras fechas.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+
 
           {/* Número de personas */}
-          <div>
-            <Label>Número de personas</Label>
-            <Select value={guestCount.toString()} onValueChange={handleGuestCountChange}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 3, 4].map((num) => (
-                  <SelectItem key={num} value={num.toString()}>
-                    {num}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Camas disponibles */}
-          {availableBeds.length > 0 && (
-            <div>
-              <Label>Camas Disponibles</Label>
-              <div className="grid grid-cols-6 gap-2 mt-2">
-                {availableBeds.map((bedNum) => (
-                  <Button
-                    key={bedNum}
-                    variant={selectedBed === bedNum ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => selectBed(bedNum)}
-                  >
-                    Cama {bedNum}
-                  </Button>
-                ))}
+                <div>
+            <Label>Número de personas *</Label>
+            {(!checkInDate || !checkOutDate || availableBeds.length === 0) ? (
+              <div className="relative">
+                <Select value={guestCount.toString()} onValueChange={() => {}}>
+                  <SelectTrigger className="opacity-50 cursor-not-allowed">
+                    <SelectValue />
+                  </SelectTrigger>
+                </Select>
+                <div className="absolute inset-0 cursor-not-allowed" />
               </div>
-            </div>
-          )}
+            ) : (
+              <Select value={guestCount.toString()} onValueChange={handleGuestCountChange}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5, 6]
+                    .filter(num => num <= availableBeds.length || availableBeds.length === 0)
+                    .map((num) => (
+                      <SelectItem 
+                        key={num} 
+                        value={num.toString()}
+                      >
+                        {num} {num === 1 ? "persona" : "personas"}
+                      </SelectItem>
+                    ))
+                  }
+                </SelectContent>
+              </Select>
+            )}
+            {(!checkInDate || !checkOutDate) && (
+              <p className="text-sm text-gray-500 mt-2">
+                Primero selecciona las fechas de check-in y check-out
+              </p>
+            )}
+            {checkInDate && checkOutDate && availableBeds.length === 0 && (
+              <p className="text-sm text-amber-600 mt-2">
+                No hay camas disponibles para estas fechas
+              </p>
+            )}
+            {availableBeds.length > 0 && availableBeds.length < 6 && (
+              <p className="text-sm text-blue-600 mt-2">
+                Máximo {availableBeds.length} {availableBeds.length === 1 ? "persona" : "personas"} (camas disponibles)
+              </p>
+            )}
+            {assignedBedsCount < guestCount && (
+              <p className="text-sm text-amber-600 mt-2">
+                Debes asignar {guestCount - assignedBedsCount} cama(s) más
+              </p>
+            )}
+          </div>
 
           {/* Datos de huéspedes */}
           {guests.map((guest, index) => (
             <Card key={index}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center justify-between">
-                  Huésped {index + 1}
-                  {index > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const newGuests = guests.filter((_, i) => i !== index)
-                        // Actualiza estado en el hook que llama a este componente
-                        // Aquí solo se emite el evento, la lógica queda afuera
-                        // Por eso no se hace setGuests aquí
-                        // En el hook se debe manejar esta función
-                        // Para simplificar, puedes pasar una función prop para eliminar huésped
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <span className="flex items-center gap-2">
+                    Huésped {index + 1}
+                    {guest.bedNumber !== null && (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <Bed className="h-3 w-3" />
+                        Cama {guest.bedNumber}
+                      </Badge>
+                    )}
+                  </span>
+                  {guest.name && guest.lastName && guest.dni && guest.bedNumber !== null && (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Selector de cama individual */}
+
+                <div>
+                  <Label>Cama asignada *</Label>
+                  <Select
+                    value={guest.bedNumber?.toString() || ""}
+                    onValueChange={(value) => updateGuest(index, "bedNumber", parseInt(value))}
+                    disabled={availableBeds.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona una cama" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getAvailableBedsForGuest(index).map((bed) => (
+                        <SelectItem key={bed} value={bed.toString()}>
+                          <div className="flex items-center gap-2">
+                            <Bed className="h-3 w-3" />
+                            Cama {bed}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Nombre</Label>
                     <Input
                       value={guest.name}
                       onChange={(e) => updateGuest(index, "name", e.target.value)}
+                      placeholder="Juan"
+                      required
                     />
                   </div>
                   <div>
@@ -170,6 +270,8 @@ export function ReservationForm({
                     <Input
                       value={guest.lastName}
                       onChange={(e) => updateGuest(index, "lastName", e.target.value)}
+                      placeholder="Perez"
+                      required
                     />
                   </div>
                 </div>
@@ -180,6 +282,8 @@ export function ReservationForm({
                     <Input
                       value={guest.dni}
                       onChange={(e) => updateGuest(index, "dni", e.target.value)}
+                      placeholder="12345678"
+                      required
                     />
                   </div>
                   <div>
@@ -188,6 +292,7 @@ export function ReservationForm({
                       type="email"
                       value={guest.email}
                       onChange={(e) => updateGuest(index, "email", e.target.value)}
+                      placeholder="email@ejemplo.com"
                     />
                   </div>
                 </div>
@@ -198,6 +303,7 @@ export function ReservationForm({
                     <Input
                       value={guest.origin}
                       onChange={(e) => updateGuest(index, "origin", e.target.value)}
+                      placeholder="Argentina"
                     />
                   </div>
                   <div>
@@ -205,6 +311,7 @@ export function ReservationForm({
                     <Input
                       value={guest.license}
                       onChange={(e) => updateGuest(index, "license", e.target.value)}
+                      placeholder="ABC123"
                     />
                   </div>
                 </div>
@@ -214,6 +321,8 @@ export function ReservationForm({
                   <Textarea
                     value={guest.notes}
                     onChange={(e) => updateGuest(index, "notes", e.target.value)}
+                    placeholder="Información adicional..."
+                    rows={3}
                   />
                 </div>
 
@@ -244,10 +353,24 @@ export function ReservationForm({
           ))}
 
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button 
+            variant="outline" 
+            onClick={() => onOpenChange(false)} 
+            disabled={loading}>
               Cancelar
             </Button>
-            <Button onClick={onCreateReservation} >Crear Reserva</Button>
+            <Button 
+            onClick={onSaveReservation} 
+            disabled={!isFormValid() || loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                isEditMode ? "Actualizar Reserva" : "Crear Reserva"
+              )}
+            </Button>
           </div>
         </div>
       </DialogContent>

@@ -16,6 +16,7 @@ interface SelectProps {
   value?: string
   onValueChange?: (value: string) => void
   children: React.ReactNode
+  disabled?: boolean //para desabilitar el select
 }
 
 function Select({ value = "", onValueChange = () => {}, children }: SelectProps) {
