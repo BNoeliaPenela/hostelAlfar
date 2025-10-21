@@ -83,13 +83,26 @@ export default function ReportsPage() {
     totalError,
   } = useReports()
 
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  const todayIso = format(now, "yyyy-MM-dd")
+
   const yearOptions = useMemo(() => {
-    const currentYear = new Date().getFullYear()
     const baseYears = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index)
-    const unique = new Set(baseYears)
-    unique.add(monthlyPeriod.year)
-    return Array.from(unique).sort((a, b) => a - b)
-  }, [monthlyPeriod.year])
+    const unique = new Set(baseYears.filter((year) => year <= currentYear))
+    unique.add(Math.min(monthlyPeriod.year, currentYear))
+    return Array.from(unique)
+      .filter((year) => year <= currentYear)
+      .sort((a, b) => a - b)
+  }, [monthlyPeriod.year, currentYear])
+
+  const availableMonthOptions = useMemo(() => {
+    if (monthlyPeriod.year < currentYear) {
+      return monthOptions
+    }
+    return monthOptions.filter((option) => Number(option.value) <= currentMonth)
+  }, [monthlyPeriod.year, currentYear, currentMonth])
 
   const metrics = useMemo(
     () => [
@@ -174,6 +187,7 @@ export default function ReportsPage() {
                   type="date"
                   value={dailyDate}
                   onChange={(event) => setDailyDate(event.target.value)}
+                  max={todayIso}
                   className="mt-1"
                 />
               </div>
@@ -242,7 +256,7 @@ export default function ReportsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-white">
-                      {monthOptions.map((option) => (
+                      {availableMonthOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>

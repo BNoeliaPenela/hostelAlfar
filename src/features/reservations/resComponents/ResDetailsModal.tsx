@@ -139,22 +139,6 @@ export function ResDetailsModal({
                     </div>
                   )}
 
-                  {/* Amenities */}
-                  {guest.amenities.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-gray-500 uppercase font-medium">
-                        Amenities incluidos
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {guest.amenities.map((amenity, i) => (
-                          <Badge key={i} variant="outline" className="text-xs">
-                            {amenity}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Desayuno */}
                   {guest.breakfast && (
                     <div className="flex items-center gap-2 text-sm bg-green-50 text-green-700 p-2 rounded-md">

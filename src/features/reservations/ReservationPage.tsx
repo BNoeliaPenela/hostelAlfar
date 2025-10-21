@@ -16,12 +16,14 @@ export default function ReservationPage() {
     setCheckInDate,
     checkOutDate,
     setCheckOutDate,
+    checkInTime,
+    setCheckInTime,
+    checkOutTime,
+    setCheckOutTime,
     guestCount,
     handleGuestCountChange,
     guests,
     updateGuest,
-    toggleAmenity,
-    removeGuest,
     availableBeds,
     getAvailableBedsForGuest,
     handleSaveReservation,
@@ -229,11 +231,14 @@ export default function ReservationPage() {
         setCheckInDate={setCheckInDate}
         checkOutDate={checkOutDate}
         setCheckOutDate={setCheckOutDate}
+        checkInTime={checkInTime}
+        setCheckInTime={setCheckInTime}
+        checkOutTime={checkOutTime}
+        setCheckOutTime={setCheckOutTime}
         guestCount={guestCount}
         handleGuestCountChange={handleGuestCountChange}
         guests={guests}
         updateGuest={updateGuest}
-        toggleAmenity={toggleAmenity}
         availableBeds={availableBeds}
         getAvailableBedsForGuest={getAvailableBedsForGuest}
         loading={loading}

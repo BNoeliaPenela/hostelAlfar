@@ -5,7 +5,10 @@ import {
   createReservation, 
   updateReservation, 
   deleteReservation,
-  fetchAvailableBeds } from "../services/reservationService"
+  fetchAvailableBeds,
+  checkInReservation,
+  checkOutReservation,
+} from "../services/reservationService"
 
 export function useReservations() {
   const [reservations, setReservations] = useState<reservation[]>([])
@@ -14,6 +17,8 @@ export function useReservations() {
   const [editingReservationId, setEditingReservationId] = useState<number | null>(null)
   const [checkInDate, setCheckInDate] = useState("")
   const [checkOutDate, setCheckOutDate] = useState("")
+  const [checkInTime, setCheckInTime] = useState("")
+  const [checkOutTime, setCheckOutTime] = useState("")
   const [guestCount, setGuestCount] = useState(1)
   const [guests, setGuests] = useState<GuestData[]>([
     {
@@ -21,15 +26,15 @@ export function useReservations() {
       lastName: "",
       dni: "",
       email: "",
+      telefono: "",
       origin: "",
       license: "",
       notes: "",
-      amenities: [],
       breakfast: false,
       bedNumber: null,
     },
   ])
-  const [availableBeds, setAvailableBeds] = useState<number[]>([1, 3, 7, 9, 11, 15, 18, 21, 23])
+  const [availableBeds, setAvailableBeds] = useState<number[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingBeds, setLoadingBeds] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -46,12 +51,12 @@ export function useReservations() {
   }, [])
 
   useEffect(() => {
-    if (checkInDate && checkOutDate) {
+    if (checkInDate && checkOutDate && checkInTime && checkOutTime) {
       loadAvailableBeds()
     } else {
       setAvailableBeds([])
     }
-  }, [checkInDate, checkOutDate])
+  }, [checkInDate, checkOutDate, checkInTime, checkOutTime])
 
   const loadReservations = async () => {
     setLoading(true)
@@ -66,16 +71,18 @@ export function useReservations() {
   }
 
   const loadAvailableBeds = async () => {
-    if (!checkInDate || !checkOutDate) return
+    if (!checkInDate || !checkOutDate || !checkInTime || !checkOutTime) return
     
     setLoadingBeds(true)
     try {
-      const beds = await fetchAvailableBeds(checkInDate, checkOutDate)
+      const ci = `${checkInDate} ${checkInTime}`
+      const co = `${checkOutDate} ${checkOutTime}`
+      const beds = await fetchAvailableBeds(ci, co)
       //setAvailableBeds(beds)
       //cambio 12/10
       // Si hay huéspedes con camas ya asignadas que ya no están disponibles, las limpiamos
       // Si estamos editando, agregar las camas actuales de la reserva
-      let availableBedsWithCurrent = [...beds]
+      const availableBedsWithCurrent = [...beds]
       if (isEditMode && editingReservation) {
         const currentBeds = editingReservation.guestDetails
           .map(g => g.bedNumber)
@@ -122,10 +129,10 @@ export function useReservations() {
             lastName: "",
             dni: "",
             email: "",
+            telefono: "",
             origin: "",
             license: "",
             notes: "",
-            amenities: [],
             breakfast: false,
             bedNumber: null,
           },
@@ -136,17 +143,6 @@ export function useReservations() {
   const updateGuest = (index: number, field: keyof GuestData, value: any) => {
     const updatedGuests = [...guests]
     updatedGuests[index] = { ...updatedGuests[index], [field]: value }
-    setGuests(updatedGuests)
-  }
-
-  const toggleAmenity = (guestIndex: number, amenity: string) => {
-    const updatedGuests = [...guests]
-    const currentAmenities = updatedGuests[guestIndex].amenities
-    if (currentAmenities.includes(amenity)) {
-      updatedGuests[guestIndex].amenities = currentAmenities.filter((a) => a !== amenity)
-    } else {
-      updatedGuests[guestIndex].amenities = [...currentAmenities, amenity]
-    }
     setGuests(updatedGuests)
   }
 
@@ -171,10 +167,10 @@ export function useReservations() {
       lastName: "",
       dni: "",
       email: "",
+      telefono: "",
       origin: "",
       license: "",
       notes: "",
-      amenities: [],
       breakfast: false,
       bedNumber: null,
     }])
@@ -189,8 +185,8 @@ export function useReservations() {
     }
 
     // Validaciones
-    if (!checkInDate || !checkOutDate) {
-      alert("Por favor selecciona las fechas de check-in y check-out")
+    if (!checkInDate || !checkOutDate || !checkInTime || !checkOutTime) {
+      alert("Por favor selecciona fecha y hora de check-in y check-out")
       return
     }
 
@@ -207,8 +203,8 @@ export function useReservations() {
     }
 
     const newReservation: Omit<reservation, 'id'> = {
-      checkIn: new Date(checkInDate),
-      checkOut: new Date(checkOutDate),
+      checkIn: new Date(`${checkInDate}T${checkInTime}:00`),
+      checkOut: new Date(`${checkOutDate}T${checkOutTime}:00`),
       status: "activa",
       guests: guestCount,
       guestDetails: guests
@@ -255,8 +251,8 @@ export function useReservations() {
 
     const updatedReservation: reservation = {
       id: editingReservationId,
-      checkIn: new Date(checkInDate),
-      checkOut: new Date(checkOutDate),
+      checkIn: new Date(`${checkInDate}T${checkInTime}:00`),
+      checkOut: new Date(`${checkOutDate}T${checkOutTime}:00`),
       status: "activa",
       guests: guestCount,
       guestDetails: guests
@@ -299,6 +295,8 @@ export function useReservations() {
     setEditingReservation(reservation)  // Guarda la reserva original
     setCheckInDate(reservation.checkIn.toISOString().split('T')[0])
     setCheckOutDate(reservation.checkOut.toISOString().split('T')[0])
+    setCheckInTime(reservation.checkIn.toTimeString().slice(0,5))
+    setCheckOutTime(reservation.checkOut.toTimeString().slice(0,5))
     setGuestCount(reservation.guests)
     setGuests(reservation.guestDetails)
     setIsNewReservationOpen(true)
@@ -322,14 +320,8 @@ export function useReservations() {
 
     setLoading(true)
     try {
-      const updatedReservation: reservation = {
-        ...reservation,
-        status: "en_progreso",
-        realCheckInDateTime: new Date()
-      }
-      
-      const updated = await updateReservation(id, updatedReservation)
-      setReservations(prev => prev.map(r => r.id === id ? updated : r))
+      await checkInReservation(id, new Date())
+      await loadReservations()
     } catch (error) {
       console.error("Error en check-in:", error)
       alert("Error al realizar check-in")
@@ -348,14 +340,8 @@ export function useReservations() {
 
     setLoading(true)
     try {
-      const updatedReservation: reservation = {
-        ...reservation,
-        status: "completada",
-        realCheckOutDateTime: new Date()
-      }
-      
-      const updated = await updateReservation(id, updatedReservation)
-      setReservations(prev => prev.map(r => r.id === id ? updated : r))
+      await checkOutReservation(id, new Date())
+      await loadReservations()
     } catch (error) {
       console.error("Error en check-out:", error)
       alert("Error al realizar check-out")
@@ -372,11 +358,14 @@ export function useReservations() {
     setCheckInDate,
     checkOutDate,
     setCheckOutDate,
+    checkInTime,
+    setCheckInTime,
+    checkOutTime,
+    setCheckOutTime,
     guestCount,
     handleGuestCountChange,
     guests,
     updateGuest,
-    toggleAmenity,
     availableBeds,
     getAvailableBedsForGuest,
     handleSaveReservation,

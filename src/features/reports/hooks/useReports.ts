@@ -58,8 +58,8 @@ const initialLoading: LoadingState = {
  */
 export function useReports() {
   const now = new Date()
-  const [dailyDate, setDailyDate] = useState(format(now, "yyyy-MM-dd"))
-  const [monthlyPeriod, setMonthlyPeriod] = useState<MonthlyPeriod>({
+  const [dailyDate, setDailyDateState] = useState(format(now, "yyyy-MM-dd"))
+  const [monthlyPeriod, setMonthlyPeriodState] = useState<MonthlyPeriod>({
     year: now.getFullYear(),
     month: now.getMonth() + 1,
   })
@@ -75,11 +75,44 @@ export function useReports() {
   const [loading, setLoading] = useState<LoadingState>(initialLoading)
   const [errors, setErrors] = useState<ErrorState>({})
 
+  const updateDailyDate = useCallback(
+    (value: string) => {
+      const todayIso = format(new Date(), "yyyy-MM-dd")
+
+      if (value && value > todayIso) {
+        setDaily(null)
+        setErrors((prev) => ({
+          ...prev,
+          daily: "No hay datos disponibles para fechas futuras.",
+        }))
+        setDailyDateState(todayIso)
+        return
+      }
+
+      setErrors((prev) => ({ ...prev, daily: undefined }))
+      setDailyDateState(value)
+    },
+    [setDaily, setErrors, setDailyDateState],
+  )
+
   /**
    * Recupera la ocupacion diaria para la fecha indicada (usa la actual por defecto).
    */
   const loadDaily = useCallback(
     async (date: string = dailyDate) => {
+      const todayIso = format(new Date(), "yyyy-MM-dd")
+      if (date && date > todayIso) {
+        setDaily(null)
+        setErrors((prev) => ({
+          ...prev,
+          daily: "No hay datos disponibles para fechas futuras.",
+        }))
+        if (dailyDate !== todayIso) {
+          setDailyDateState(todayIso)
+        }
+        return
+      }
+
       setLoading((prev) => ({ ...prev, daily: true }))
       setErrors((prev) => ({ ...prev, daily: undefined }))
 
@@ -87,16 +120,23 @@ export function useReports() {
         const response = await fetchDailyOccupancy(date)
         setDaily(response)
       } catch (error) {
-        console.error("Error cargando ocupacion diaria:", error)
-        setErrors((prev) => ({
-          ...prev,
-          daily: "No pudimos cargar la ocupacion diaria.",
-        }))
+        if (error instanceof Error && error.name === "FutureDateError") {
+          setErrors((prev) => ({
+            ...prev,
+            daily: "No hay datos disponibles para fechas futuras.",
+          }))
+        } else {
+          console.error("Error cargando ocupacion diaria:", error)
+          setErrors((prev) => ({
+            ...prev,
+            daily: "No pudimos cargar la ocupacion diaria.",
+          }))
+        }
       } finally {
         setLoading((prev) => ({ ...prev, daily: false }))
       }
     },
-    [dailyDate],
+    [dailyDate, setDailyDateState],
   )
 
   /**
@@ -104,23 +144,65 @@ export function useReports() {
    */
   const loadMonthly = useCallback(
     async (year: number = monthlyPeriod.year, month: number = monthlyPeriod.month) => {
+      const current = new Date()
+      const currentYear = current.getFullYear()
+      const currentMonth = current.getMonth() + 1
+
+      let nextYear = year
+      let nextMonth = Math.min(Math.max(month, 1), 12)
+
+      const isFuturePeriod =
+        nextYear > currentYear || (nextYear === currentYear && nextMonth > currentMonth)
+
+      if (isFuturePeriod) {
+        nextYear = Math.min(nextYear, currentYear)
+        if (nextYear === currentYear) {
+          nextMonth = Math.min(nextMonth, currentMonth)
+        }
+
+        setMonthly(null)
+        setErrors((prev) => ({
+          ...prev,
+          monthly: "No hay datos disponibles para meses futuros.",
+        }))
+
+        setMonthlyPeriodState((prev) => {
+          if (prev.year === nextYear && prev.month === nextMonth) {
+            return prev
+          }
+          return {
+            year: nextYear,
+            month: nextMonth,
+          }
+        })
+
+        return
+      }
+
       setLoading((prev) => ({ ...prev, monthly: true }))
       setErrors((prev) => ({ ...prev, monthly: undefined }))
 
       try {
-        const response = await fetchMonthlyOccupancy(year, month)
+        const response = await fetchMonthlyOccupancy(nextYear, nextMonth)
         setMonthly(response)
       } catch (error) {
-        console.error("Error cargando ocupacion mensual:", error)
-        setErrors((prev) => ({
-          ...prev,
-          monthly: "No pudimos cargar la ocupacion mensual.",
-        }))
+        if (error instanceof Error && error.name === "FuturePeriodError") {
+          setErrors((prev) => ({
+            ...prev,
+            monthly: "No hay datos disponibles para meses futuros.",
+          }))
+        } else {
+          console.error("Error cargando ocupacion mensual:", error)
+          setErrors((prev) => ({
+            ...prev,
+            monthly: "No pudimos cargar la ocupacion mensual.",
+          }))
+        }
       } finally {
         setLoading((prev) => ({ ...prev, monthly: false }))
       }
     },
-    [monthlyPeriod],
+    [monthlyPeriod, setMonthlyPeriodState],
   )
 
   /**
@@ -172,10 +254,28 @@ export function useReports() {
    * Actualiza el periodo mensual manteniendo los valores no especificados.
    */
   const updateMonthlyPeriod = (period: Partial<MonthlyPeriod>) => {
-    setMonthlyPeriod((prev) => ({
-      year: period.year ?? prev.year,
-      month: period.month ?? prev.month,
-    }))
+    setMonthlyPeriodState((prev) => {
+      const now = new Date()
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth() + 1
+
+      let nextYear = period.year ?? prev.year
+      let nextMonth = period.month ?? prev.month
+
+      nextMonth = Math.min(Math.max(nextMonth, 1), 12)
+
+      if (nextYear > currentYear) {
+        nextYear = currentYear
+      }
+      if (nextYear === currentYear && nextMonth > currentMonth) {
+        nextMonth = currentMonth
+      }
+
+      return {
+        year: nextYear,
+        month: nextMonth,
+      }
+    })
   }
 
   /**
@@ -191,7 +291,7 @@ export function useReports() {
   return {
     daily,
     dailyDate,
-    setDailyDate,
+    setDailyDate: updateDailyDate,
     reloadDaily: loadDaily,
     dailyLoading: loading.daily,
     dailyError: errors.daily ?? null,

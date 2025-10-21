@@ -35,25 +35,21 @@ interface ReservationFormProps {
   setCheckInDate: (date: string) => void
   checkOutDate: string
   setCheckOutDate: (date: string) => void
+  checkInTime: string
+  setCheckInTime: (time: string) => void
+  checkOutTime: string
+  setCheckOutTime: (time: string) => void
   guestCount: number
   handleGuestCountChange: (count: string) => void
   guests: GuestData[]
   updateGuest: (index: number, field: keyof GuestData, value: any) => void
-  toggleAmenity: (guestIndex: number, amenity: string) => void
-  removeGuest: (index: number) => void
   availableBeds: number[]
   getAvailableBedsForGuest: (guestIndex: number) => number[]
   loading: boolean
   loadingBeds: boolean
 }
 
-const amenitiesList = [
-  "Toalla",
-  "Sábanas",
-  "Almohada Extra",
-  "Locker",
-  "WiFi Premium",
-]
+
 
 export function ReservationForm({
   isOpen,
@@ -64,18 +60,24 @@ export function ReservationForm({
   setCheckInDate,
   checkOutDate,
   setCheckOutDate,
+  checkInTime,
+  setCheckInTime,
+  checkOutTime,
+  setCheckOutTime,
   guestCount,
   handleGuestCountChange,
   guests,
   updateGuest,
-  toggleAmenity,
-  removeGuest,
   availableBeds,
   getAvailableBedsForGuest,
   loading,
   loadingBeds,
 }: ReservationFormProps) {
-
+  const today = new Date()
+  const timezoneOffsetMs = today.getTimezoneOffset() * 60 * 1000
+  const localToday = new Date(today.getTime() - timezoneOffsetMs)
+  const todayDateStr = localToday.toISOString().split('T')[0]
+  const nowTimeStr = today.toTimeString().slice(0,5)
   const isFormValid = () => {
     return checkInDate && 
            checkOutDate && 
@@ -105,9 +107,20 @@ export function ReservationForm({
                     type="date"
                     value={checkInDate}
                     onChange={(e) => setCheckInDate(e.target.value)}
+                    min={todayDateStr}
                     required
                     className="bg-white"
                   />
+                  <div className="mt-2">
+                    <Input
+                      type="time"
+                      value={checkInTime}
+                      onChange={(e) => setCheckInTime(e.target.value)}
+                      min={checkInDate === todayDateStr ? nowTimeStr : undefined}
+                      required
+                      className="bg-white"
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label className="text-blue-900">Check-out *</Label>
@@ -119,6 +132,16 @@ export function ReservationForm({
                     required
                     className="bg-white"
                   />
+                  <div className="mt-2">
+                    <Input
+                      type="time"
+                      value={checkOutTime}
+                      onChange={(e) => setCheckOutTime(e.target.value)}
+                      min={checkOutDate === checkInDate ? checkInTime : undefined}
+                      required
+                      className="bg-white"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -175,7 +198,7 @@ export function ReservationForm({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50">
                   {[1, 2, 3, 4, 5, 6]
                     .filter(num => num <= availableBeds.length || availableBeds.length === 0)
                     .map((num) => (
@@ -244,7 +267,7 @@ export function ReservationForm({
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona una cama" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-40">
                       {getAvailableBedsForGuest(index).map((bed) => (
                         <SelectItem key={bed} value={bed.toString()}>
                           <div className="flex items-center gap-2">
@@ -288,6 +311,15 @@ export function ReservationForm({
                       required
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Telefono</Label>
+                    <Input
+                      value={guest.telefono}
+                      onChange={(e) => updateGuest(index, "telefono", e.target.value)}
+                      placeholder=""
+                    />
+                  </div>
                   <div>
                     <Label>Email</Label>
                     <Input
@@ -297,6 +329,7 @@ export function ReservationForm({
                       placeholder="email@ejemplo.com"
                     />
                   </div>
+                </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -326,29 +359,6 @@ export function ReservationForm({
                     placeholder="Información adicional..."
                     rows={3}
                   />
-                </div>
-
-                <div>
-                  <Label>Amenities</Label>
-                  <div className="grid grid-cols-3 gap-2 mt-2">
-                    {amenitiesList.map((amenity) => (
-                      <div key={amenity} className="flex items-center space-x-2">
-                        <Checkbox
-                          checked={guest.amenities.includes(amenity)}
-                          onCheckedChange={() => toggleAmenity(index, amenity)}
-                        />
-                        <Label className="text-sm">{amenity}</Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={guest.breakfast}
-                    onCheckedChange={(checked) => updateGuest(index, "breakfast", checked)}
-                  />
-                  <Label>Incluir desayuno</Label>
                 </div>
               </CardContent>
             </Card>

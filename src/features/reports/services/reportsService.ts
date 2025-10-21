@@ -61,6 +61,18 @@ export interface TotalOccupancyResponse {
  * @returns Resumen de ocupacion diaria para la fecha indicada.
  */
 export async function fetchDailyOccupancy(date?: string): Promise<DailyOccupancyResponse> {
+  if (date) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const requested = new Date(`${date}T00:00:00`)
+
+    if (requested.getTime() > today.getTime()) {
+      const error = new RangeError("La fecha solicitada pertenece a un periodo futuro.")
+      error.name = "FutureDateError"
+      throw error
+    }
+  }
+
   const params = date ? { fecha: date } : undefined
   const response = await apiClient.get<DailyOccupancyResponse>("/reportes/ocupacion-diaria", { params })
   return response.data
@@ -77,9 +89,25 @@ export async function fetchMonthlyOccupancy(
   year?: number,
   month?: number,
 ): Promise<MonthlyOccupancyResponse> {
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+
+  const targetYear = typeof year === "number" ? year : currentYear
+  const normalizedMonth = Math.min(Math.max(typeof month === "number" ? month : currentMonth, 1), 12)
+
+  const targetPeriodStart = new Date(targetYear, normalizedMonth - 1, 1)
+  const currentPeriodStart = new Date(currentYear, currentMonth - 1, 1)
+
+  if (targetPeriodStart.getTime() > currentPeriodStart.getTime()) {
+    const error = new RangeError("El periodo solicitado pertenece al futuro.")
+    error.name = "FuturePeriodError"
+    throw error
+  }
+
   const params: Record<string, string> = {}
-  if (typeof year === "number") params.anio = year.toString()
-  if (typeof month === "number") params.mes = month.toString().padStart(2, "0")
+  if (typeof year === "number") params.anio = targetYear.toString()
+  if (typeof month === "number") params.mes = normalizedMonth.toString().padStart(2, "0")
 
   const response = await apiClient.get<MonthlyOccupancyResponse>("/reportes/ocupacion-mensual", {
     params: Object.keys(params).length ? params : undefined,

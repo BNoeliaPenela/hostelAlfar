@@ -13,11 +13,11 @@ export interface GuestData {
   lastName: string
   dni: string
   email: string
+  telefono: string
   origin: string
   license: string
   notes: string
-  amenities: string[]
-  breakfast: boolean
+  breakfast?: boolean
   bedNumber: number | null
 }   
 
