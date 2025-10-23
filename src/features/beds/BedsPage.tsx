@@ -23,6 +23,7 @@ export function BedsPage() {
         loadingBeds,
         statusUpdating,
         error,
+        handleCleanSelected,
     } = useBeds();
     
 
@@ -107,6 +108,19 @@ export function BedsPage() {
                             {statusUpdating && (
                                 <p className="text-xs text-gray-500 mt-1">Actualizando estado...</p>
                             )}
+                        </div>
+
+                        {/* Acción rápida: Limpiar cama (si está PARA_LIMPIAR) */}
+                        <div className="flex items-center justify-between">
+                            <div />
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                disabled={selectedBed?.status !== 'limpieza' || statusUpdating}
+                                onClick={handleCleanSelected}
+                            >
+                                Marcar como limpia
+                            </Button>
                         </div>
 
                         {selectedBed?.guest && (

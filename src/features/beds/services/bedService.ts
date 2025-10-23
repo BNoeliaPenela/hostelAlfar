@@ -67,6 +67,11 @@ export const updateBedStatus = async (backendId: number, status: BedStatus): Pro
   return mapBedFromApi(data)
 }
 
+export const cleanBed = async (backendId: number): Promise<BedData> => {
+  const { data } = await apiClient.post<BedApiModel>(`/camas/${backendId}/limpiar/`)
+  return mapBedFromApi(data)
+}
+
 export const bedsStatusMapping = {
   apiToUi: API_TO_UI_STATUS,
   uiToApi: UI_TO_API_STATUS,

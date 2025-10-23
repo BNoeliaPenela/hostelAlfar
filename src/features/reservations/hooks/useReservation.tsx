@@ -8,6 +8,7 @@ import {
   fetchAvailableBeds,
   checkInReservation,
   checkOutReservation,
+  noShowReservation,
 } from "../services/reservationService"
 
 export function useReservations() {
@@ -39,6 +40,7 @@ export function useReservations() {
   const [loadingBeds, setLoadingBeds] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [editingReservation, setEditingReservation] = useState<reservation | null>(null)  // Guarda la reserva original
+  const [snoozedUntil, setSnoozedUntil] = useState<Map<number, number>>(new Map())
   /*const [selectedBed, setSelectedBed] = useState<number>(0);
   const selectBed = (bedNum: number) => setSelectedBed(bedNum);
   // Nuevo método para agregar una reserva
@@ -48,6 +50,12 @@ export function useReservations() {
 
   useEffect(() => {
     loadReservations()
+  }, [])
+
+  // Recalcula listas cada 60s (sin abrir popups)
+  useEffect(() => {
+    const timer = setInterval(() => setReservations((prev) => [...prev]), 60000)
+    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -69,6 +77,23 @@ export function useReservations() {
       setLoading(false)
     }
   }
+
+  // Listas derivadas para UI (pendientes / listos)
+  const nowTs = Date.now()
+  const fifteenMinMs = 15 * 60 * 1000
+  const pendingCheckins = reservations.filter(r => {
+    if (r.status !== 'activa') return false
+    const until = snoozedUntil.get(r.id)
+    if (until && until > nowTs) return false
+    return r.checkIn.getTime() <= nowTs + fifteenMinMs
+  })
+  const overdueCheckins = pendingCheckins.filter(r => r.checkIn.getTime() < nowTs)
+  const readyCheckouts = reservations.filter(r => {
+    if (r.status !== 'en_progreso') return false
+    const started = r.realCheckInDateTime?.getTime()
+    if (!started) return false
+    return nowTs >= (started + 60 * 60 * 1000)
+  })
 
   const loadAvailableBeds = async () => {
     if (!checkInDate || !checkOutDate || !checkInTime || !checkOutTime) return
@@ -217,6 +242,7 @@ export function useReservations() {
       await createReservation(newReservation)
       //setReservations(prev => [...prev, created])
       await loadReservations() // recarga desde el mock actualizado
+      try { window.dispatchEvent(new Event('beds:reload')) } catch {}
       resetForm()
       setIsNewReservationOpen(false)
     } catch (error) {
@@ -262,6 +288,7 @@ export function useReservations() {
     try {
       const updated = await updateReservation(editingReservationId, updatedReservation)
       setReservations(prev => prev.map(r => r.id === editingReservationId ? updated : r))
+      try { window.dispatchEvent(new Event('beds:reload')) } catch {}
       resetForm()
       setIsNewReservationOpen(false)
     } catch (error) {
@@ -314,14 +341,24 @@ export function useReservations() {
     const reservation = reservations.find(r => r.id === id)
     if (!reservation) return
 
-    if (!confirm("¿Confirmar check-in para esta reserva?")) {
-      return
+    const now = new Date()
+    const scheduled = reservation.checkIn
+    if (now.getTime() < scheduled.getTime()) {
+      const mins = Math.max(0, Math.round((scheduled.getTime() - now.getTime()) / 60000))
+      const proceed = window.confirm(`Estás adelantando el check-in ${mins} min antes de lo programado. ¿Deseas continuar?`)
+      if (!proceed) return
+    } else {
+      if (!confirm("¿Confirmar check-in para esta reserva?")) {
+        return
+      }
     }
 
     setLoading(true)
     try {
       await checkInReservation(id, new Date())
       await loadReservations()
+      // Solicita refrescar estado de camas si la vista de camas está abierta
+      try { window.dispatchEvent(new Event('beds:reload')) } catch {}
     } catch (error) {
       console.error("Error en check-in:", error)
       alert("Error al realizar check-in")
@@ -330,21 +367,98 @@ export function useReservations() {
     }
   }
 
+  // Acciones rápidas para bandeja
+  const quickCheckIn = async (id: number) => {
+    setLoading(true)
+    try {
+      await checkInReservation(id, new Date())
+      await loadReservations()
+      try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const bulkCheckIn = async (ids: number[]) => {
+    setLoading(true)
+    try {
+      for (const id of ids) {
+        try { await checkInReservation(id, new Date()) } catch {}
+      }
+      await loadReservations()
+      try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const markNoShow = async (id: number) => {
+    setLoading(true)
+    try {
+      await noShowReservation(id)
+      await loadReservations()
+      try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const snoozeReservation = (id: number, minutes: number) => {
+    setSnoozedUntil((prev) => {
+      const next = new Map(prev)
+      next.set(id, Date.now() + minutes * 60 * 1000)
+      return next
+    })
+  }
+
   const handleCheckOut = async (id: number) => {
     const reservation = reservations.find(r => r.id === id)
     if (!reservation) return
 
-    if (!confirm("¿Confirmar check-out para esta reserva?")) {
-      return
+    const now = new Date()
+    const scheduledOut = reservation.checkOut
+    const realIn = reservation.realCheckInDateTime || null
+    // Regla backend: estadía mínima 1h desde check-in real
+    if (realIn) {
+      const diffMs = now.getTime() - realIn.getTime()
+      if (diffMs < 60 * 60 * 1000) {
+        alert("No se puede realizar el check-out: la estadía mínima es de 1 hora desde el check-in.")
+        return
+      }
+    }
+
+    if (now.getTime() < scheduledOut.getTime()) {
+      const mins = Math.max(0, Math.round((scheduledOut.getTime() - now.getTime()) / 60000))
+      const proceed = window.confirm(`Estás adelantando el check-out ${mins} min antes de lo programado. ¿Deseas continuar?`)
+      if (!proceed) return
+    } else {
+      if (!confirm("¿Confirmar check-out para esta reserva?")) {
+        return
+      }
     }
 
     setLoading(true)
     try {
-      await checkOutReservation(id, new Date())
+      // Deja que el backend use el "now" por defecto (sin enviar fecha)
+      await checkOutReservation(id)
       await loadReservations()
+      // Tras checkout, las camas quedan PARA_LIMPIAR -> refrescar listado de camas
+      try { window.dispatchEvent(new Event('beds:reload')) } catch {}
     } catch (error) {
       console.error("Error en check-out:", error)
-      alert("Error al realizar check-out")
+      // Fallback: recargar y verificar si el backend igualmente marcó checkout
+      try {
+        const fresh = await fetchReservations()
+        setReservations(fresh)
+        const updated = fresh.find(r => r.id === id)
+        if (updated && (updated.status === 'completada' || updated.realCheckOutDateTime)) {
+          try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+          return
+        }
+      } catch {}
+      const anyErr: any = error as any
+      const msg = anyErr?.response?.data?.error || anyErr?.response?.data?.message || anyErr?.message || 'Error al realizar check-out'
+      alert(msg)
     } finally {
       setLoading(false)
     }
@@ -376,6 +490,13 @@ export function useReservations() {
     loadingBeds,
     handleCheckIn,
     handleCheckOut,
+    pendingCheckins,
+    overdueCheckins,
+    readyCheckouts,
+    quickCheckIn,
+    bulkCheckIn,
+    markNoShow,
+    snoozeReservation,
     
 
   }

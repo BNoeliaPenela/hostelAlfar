@@ -4,16 +4,19 @@ import apiClient from "../../../lib/apiClient"
 // No hay mocks: todo va contra el backend real
 
 // Tipos de respuesta del backend
-type CamaDetalle = { cama_numero: number; cliente_nombre: string }
-type ReservaApi = {
+export type CamaDetalle = { cama_numero: number; cliente_nombre: string }
+export type PersonaDetalle = { id: number; nombre: string; apellido: string }
+export type ReservaApi = {
   id: number
   check_in: string
   check_out: string
-  estado?: string
+  estado?: string | null
   huespedes?: number[]
   camas_detalle?: CamaDetalle[]
-  real_check_in?: string | null
-  real_check_out?: string | null
+  huespedes_detalle?: PersonaDetalle[]
+  cliente_detalle?: PersonaDetalle
+  checked_in_at?: string | null
+  checked_out_at?: string | null
   status?: string
 }
 type CamasDisponiblesItem = { numero: number }
@@ -57,9 +60,38 @@ async function findOrCreateClient(guest: GuestData): Promise<number> {
   return created.data.id as number
 }
 
+function pad(n: number): string { return n < 10 ? `0${n}` : `${n}` }
 function formatToBackend(dt: Date): string {
-  // El backend acepta ISO o 'YYYY-MM-DD HH:MM'; enviamos ISO para simplicidad
-  return dt.toISOString()
+  // Backend espera 'YYYY-MM-DD HH:MM' sin zona horaria (USE_TZ=False)
+  const year = dt.getFullYear()
+  const month = pad(dt.getMonth() + 1)
+  const day = pad(dt.getDate())
+  const hours = pad(dt.getHours())
+  const minutes = pad(dt.getMinutes())
+  return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
+function mapApiEstadoToUi(r: ReservaApi): reservation["status"] {
+  // Primero usar checked_in/out si están disponibles
+  if (r.checked_out_at) return "completada"
+  if (r.checked_in_at) return "en_progreso"
+  // Fallback a campo estado si viene provisto
+  const e = (r.estado || r.status || "").toString().toUpperCase()
+  switch (e) {
+    case "CHECKED_OUT":
+    case "COMPLETADA":
+      return "completada"
+    case "CHECKED_IN":
+    case "EN_PROGRESO":
+      return "en_progreso"
+    case "CANCELADA":
+    case "NO_SHOW":
+      return "cancelada"
+    case "RESERVADA":
+    case "ACTIVA":
+    default:
+      return "activa"
+  }
 }
 
 export async function fetchReservations(): Promise<reservation[]> {
@@ -82,11 +114,11 @@ export async function fetchReservations(): Promise<reservation[]> {
         id: r.id,
         checkIn: new Date(r.check_in),
         checkOut: new Date(r.check_out),
-        status: (r.estado || r.status || "activa") as reservation["status"],
+        status: mapApiEstadoToUi(r),
         guests: Math.max(guestDetails.length, (r.huespedes?.length || 0)),
         guestDetails,
-        realCheckInDateTime: r.real_check_in ? new Date(r.real_check_in) : null,
-        realCheckOutDateTime: r.real_check_out ? new Date(r.real_check_out) : null,
+        realCheckInDateTime: r.checked_in_at ? new Date(r.checked_in_at) : null,
+        realCheckOutDateTime: r.checked_out_at ? new Date(r.checked_out_at) : null,
       } as reservation
     })
   } catch (error) {
@@ -215,7 +247,7 @@ export async function updateReservation(id: number, reservation: reservation): P
       id: data.id,
       checkIn: new Date(data.check_in),
       checkOut: new Date(data.check_out),
-      status: (data.estado || data.status || "activa") as reservation["status"],
+      status: mapApiEstadoToUi(data),
       guests: reservation.guests,
       guestDetails: reservation.guestDetails,
     }
@@ -236,7 +268,7 @@ export async function deleteReservation(id: number): Promise<void> {
 
 export async function checkInReservation(id: number, when?: Date): Promise<void> {
   try {
-    const payload = when ? { check_in: formatToBackend(when) } : undefined
+    const payload = when ? { check_in: formatToBackend(when) } : {}
     await apiClient.post(`/reservas/${id}/checkin/`, payload)
   } catch (error) {
     console.error('Error en check-in:', error)
@@ -246,10 +278,38 @@ export async function checkInReservation(id: number, when?: Date): Promise<void>
 
 export async function checkOutReservation(id: number, when?: Date): Promise<void> {
   try {
-    const payload = when ? { check_out: formatToBackend(when) } : undefined
+    const payload = when ? { check_out: formatToBackend(when) } : {}
     await apiClient.post(`/reservas/${id}/checkout/`, payload)
   } catch (error) {
     console.error('Error en check-out:', error)
     throw error
   }
+}
+
+export async function noShowReservation(id: number): Promise<void> {
+  try {
+    await apiClient.post(`/reservas/${id}/no_show/`)
+  } catch (error) {
+    console.error('Error en no-show:', error)
+    throw error
+  }
+}
+
+export async function cleanBedsByNumbers(bedNumbers: number[]): Promise<void> {
+  const bedsMap = await ensureBedsMap()
+  const ids = bedNumbers
+    .map((n) => bedsMap.get(n))
+    .filter((id): id is number => typeof id === 'number')
+  for (const id of ids) {
+    try {
+      await apiClient.post(`/camas/${id}/limpiar/`)
+    } catch (err) {
+      console.error('Error limpiando cama', id, err)
+    }
+  }
+}
+
+export async function fetchReservationsRaw(): Promise<ReservaApi[]> {
+  const { data } = await apiClient.get(`/reservas/`)
+  return (Array.isArray(data) ? data : []) as ReservaApi[]
 }

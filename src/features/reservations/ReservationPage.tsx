@@ -3,7 +3,8 @@
 import { useReservations } from "../reservations/hooks/useReservation"
 import { ReservationCard } from "../reservations/resComponents/ReservationCard"
 import { ReservationForm } from "../reservations/resComponents/ReservationForm"
-import { Plus, Calendar, Loader2  } from "lucide-react"
+import { Plus, Calendar, Loader2, AlertTriangle, Clock, UserCheck, Ban } from "lucide-react"
+import { useState } from "react"
 import { Button } from "../../components/ui/Button"
 
 export default function ReservationPage() {
@@ -34,6 +35,12 @@ export default function ReservationPage() {
     loadingBeds,
     handleCheckIn,
     handleCheckOut,
+    pendingCheckins,
+    overdueCheckins,
+    quickCheckIn,
+    bulkCheckIn,
+    markNoShow,
+    snoozeReservation,
   } = useReservations()
 
   const formatDate = (date: Date) => date.toLocaleDateString("es-ES", {
@@ -56,6 +63,15 @@ export default function ReservationPage() {
   })
   
   const completedReservations = reservations.filter(r => r.status === "completada")
+  const [showPendingPanel, setShowPendingPanel] = useState(false)
+  const [selectedPendingIds, setSelectedPendingIds] = useState<number[]>([])
+  const toggleSelectPending = (id: number) => {
+    setSelectedPendingIds((prev: number[]) => prev.includes(id) ? prev.filter((x: number) => x !== id) : [...prev, id])
+  }
+  const allPendingIds = pendingCheckins.map(r => r.id)
+  const toggleSelectAllPending = () => {
+    setSelectedPendingIds((prev: number[]) => prev.length === allPendingIds.length ? [] : allPendingIds)
+  }
 // Handler para crear reserva
   /*const handleCreateReservation = () => { //
     addReservation({
@@ -156,6 +172,26 @@ export default function ReservationPage() {
         </div>
       </div>
 
+      {/* Banner de pendientes de check-in */}
+      {(pendingCheckins.length > 0) && (
+        <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-amber-800">
+            <AlertTriangle className="h-5 w-5" />
+            <span>
+              {overdueCheckins.length > 0 ? `${overdueCheckins.length} vencid${overdueCheckins.length===1?'o':'os'}` : ''}
+              {overdueCheckins.length > 0 && (pendingCheckins.length - overdueCheckins.length) > 0 ? ', ' : ''}
+              {(pendingCheckins.length - overdueCheckins.length) > 0 ? `${pendingCheckins.length - overdueCheckins.length} próximos` : ''}
+              {` check-ins pendientes`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowPendingPanel(true)}>
+              Ver pendientes
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Loading State */}
       {loading && (
         <div className="flex items-center justify-center py-8">
@@ -244,6 +280,58 @@ export default function ReservationPage() {
         loading={loading}
         loadingBeds={loadingBeds}
       />
+
+      {/* Panel de pendientes de check-in */}
+      {showPendingPanel && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Clock className="h-5 w-5" /> Pendientes de Check-in
+              </h3>
+              <Button variant="outline" size="sm" onClick={() => setShowPendingPanel(false)}>Cerrar</Button>
+            </div>
+            <div className="flex items-center justify-between mb-2 text-sm text-gray-600">
+              <div>
+                Vencidos: {overdueCheckins.length} · Próximos (≤15 min): {pendingCheckins.length - overdueCheckins.length}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={toggleSelectAllPending}>
+                  {selectedPendingIds.length === allPendingIds.length ? 'Deseleccionar' : 'Seleccionar todos'}
+                </Button>
+                <Button size="sm" disabled={selectedPendingIds.length === 0} onClick={async () => { await bulkCheckIn(selectedPendingIds); setSelectedPendingIds([]); setShowPendingPanel(false) }}>
+                  <UserCheck className="h-4 w-4 mr-1" /> Check-in ({selectedPendingIds.length})
+                </Button>
+              </div>
+            </div>
+            <div className="max-h-96 overflow-y-auto divide-y border rounded">
+              {pendingCheckins.map(r => (
+                <div key={r.id} className="p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" checked={selectedPendingIds.includes(r.id)} onChange={() => toggleSelectPending(r.id)} />
+                    <div>
+                      <div className="font-medium">Reserva #{r.id}</div>
+                      <div className="text-xs text-gray-600">Check-in: {r.checkIn.toLocaleString('es-AR')}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => snoozeReservation(r.id, 10)}>Posponer 10 min</Button>
+                    <Button variant="outline" size="sm" onClick={() => markNoShow(r.id)} title="Marcar como no show">
+                      <Ban className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" onClick={async () => { await quickCheckIn(r.id); setSelectedPendingIds((prev: number[]) => prev.filter((x: number) => x!==r.id)) }}>
+                      Check-in
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {pendingCheckins.length === 0 && (
+                <div className="p-4 text-sm text-gray-500">No hay pendientes</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

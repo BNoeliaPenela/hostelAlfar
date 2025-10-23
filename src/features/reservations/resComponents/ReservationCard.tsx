@@ -2,9 +2,10 @@ import type { reservation } from "../types/reservations"
 import { Card, CardContent } from "../../../components/ui/Card"
 import { Badge } from "../../../components/ui/Badge"
 import { Button } from "../../../components/ui/Button"
-import { Users, Edit, Trash2, Bed, Eye, LogIn, LogOut} from "lucide-react"
+import { Users, Edit, Trash2, Bed, Eye, LogIn, LogOut, Sparkles } from "lucide-react"
 import { useState } from "react"
 import { ResDetailsModal } from "./ResDetailsModal"
+import { cleanBedsByNumbers } from "../services/reservationService"
 
 interface ReservationCardProps {
   reservation: reservation
@@ -57,6 +58,22 @@ export function ReservationCard({
      // Determina qué botones mostrar según el estado
   const showCheckIn = reservation.status === "activa"
   const showCheckOut = reservation.status === "en_progreso"
+  const canCheckOut = reservation.realCheckInDateTime
+    ? Date.now() >= (reservation.realCheckInDateTime.getTime() + 60 * 60 * 1000)
+    : false
+  const checkOutTitle = showCheckOut && !canCheckOut
+    ? `Disponible desde ${(reservation.realCheckInDateTime ? new Date(reservation.realCheckInDateTime.getTime() + 60*60*1000) : reservation.checkOut).toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'})}`
+    : undefined
+
+  const handleCleanBeds = async () => {
+    const beds = reservation.guestDetails
+      .map(g => g.bedNumber)
+      .filter((n): n is number => typeof n === 'number')
+    if (beds.length === 0) return
+    await cleanBedsByNumbers(beds)
+    try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+    alert('Camas marcadas como limpias')
+  }
 
   return (
      <>
@@ -142,9 +159,22 @@ export function ReservationCard({
                     onClick={() => onCheckOut(reservation.id)}
                     className="bg-red-600 hover:bg-red-700 text-white"
                     size="sm"
+                    disabled={!canCheckOut}
+                    title={checkOutTitle}
                   >
                     <LogOut className="h-4 w-4 mr-1" />
                     CHECK OUT
+                  </Button>
+                )}
+                {reservation.status === 'completada' && (
+                  <Button
+                    onClick={handleCleanBeds}
+                    variant="outline"
+                    size="sm"
+                    title="Marcar todas las camas de esta reserva como limpias"
+                  >
+                    <Sparkles className="h-4 w-4 mr-1" />
+                    Limpiar camas
                   </Button>
                 )}
               </div>

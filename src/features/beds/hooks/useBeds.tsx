@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import type { BedData, BedStatus } from "../types/beds"
-import { fetchBeds, updateBedStatus } from "../services/bedService"
+import { fetchBeds, updateBedStatus, cleanBed } from "../services/bedService"
 
 export const useBeds = () => {
     const [beds, setBeds] = useState<BedData[]>([])
@@ -37,6 +37,13 @@ export const useBeds = () => {
         loadBeds()
     }, [loadBeds])
 
+    // Escucha evento global para refrescar camas (emitido desde Reservas)
+    useEffect(() => {
+        const handler = () => { loadBeds() }
+        window.addEventListener('beds:reload', handler)
+        return () => window.removeEventListener('beds:reload', handler)
+    }, [loadBeds])
+
     const handleBedClick = (bed: BedData) => {
         if (bed.backendId <= 0) return
         setSelectedBed(bed)
@@ -59,6 +66,21 @@ export const useBeds = () => {
             setStatusUpdating(false)
         }
     }, [selectedBed, loadBeds])
+
+    const handleCleanSelected = useCallback(async () => {
+        if (!selectedBed) return
+        setStatusUpdating(true)
+        setError(null)
+        try {
+            await cleanBed(selectedBed.backendId)
+            await loadBeds()
+        } catch (err) {
+            console.error("Error limpiando cama:", err)
+            setError("No pudimos limpiar la cama. Intenta nuevamente.")
+        } finally {
+            setStatusUpdating(false)
+        }
+    }, [selectedBed, loadBeds])
     
     const getStatusCount = (status: BedStatus) =>
         beds.filter((bed) => bed.status === status).length
@@ -75,5 +97,6 @@ export const useBeds = () => {
         loadingBeds,
         statusUpdating,
         error,
+        handleCleanSelected,
     }
 }

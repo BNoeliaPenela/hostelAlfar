@@ -14,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../components/ui/Dialog"
-import { Checkbox } from "../../../components/ui/Checkbox"
 import {
   Select,
   SelectContent,
@@ -23,7 +22,7 @@ import {
   SelectValue,
 } from "../../../components/ui/Select"
 import { Badge } from "../../../components/ui/Badge"
-import { AlertCircle, Bed, Calendar, CheckCircle2, Loader2, Trash2 } from "lucide-react"
+import { AlertCircle, Bed, Calendar, CheckCircle2, Loader2 } from "lucide-react"
 import type { GuestData } from "../types/reservations"
 
 interface ReservationFormProps {

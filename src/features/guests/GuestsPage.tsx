@@ -1,14 +1,17 @@
-import { useState, type KeyboardEvent } from "react"
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react"
 import { Search, Loader2 } from "lucide-react"
 import { useGuests } from "./hooks/useGuests"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Label } from "@/components/ui/Label"
+import { Badge } from "@/components/ui/Badge"
+import { fetchReservationsRaw, type ReservaApi } from "../reservations/services/reservationService"
 
 const GuestsPage = () => {
   const [searchTerm, setSearchTerm] = useState("")
   const { guests, loading, error, searchGuests, fetchGuests } = useGuests()
+  const [reservas, setReservas] = useState<ReservaApi[] | null>(null)
 
   const handleSearch = async () => {
     if (searchTerm.trim()) {
@@ -27,6 +30,51 @@ const GuestsPage = () => {
     if (event.key === "Enter") {
       void handleSearch()
     }
+  }
+
+  // Cargar reservas una vez y cuando cambie la lista de huéspedes
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await fetchReservationsRaw()
+        setReservas(data)
+      } catch (e) {
+        console.error("Error cargando reservas para huéspedes:", e)
+      }
+    }
+    void load()
+  }, [])
+
+  const reservasIndex = useMemo(() => {
+    const map = new Map<number, ReservaApi[]>()
+    if (!reservas) return map
+    for (const r of reservas) {
+      const involvedIds = new Set<number>()
+      if (r.cliente_detalle?.id) involvedIds.add(r.cliente_detalle.id)
+      if (Array.isArray(r.huespedes_detalle)) {
+        for (const h of r.huespedes_detalle) {
+          if (h?.id) involvedIds.add(h.id)
+        }
+      }
+      involvedIds.forEach((gid) => {
+        const arr = map.get(gid) || []
+        arr.push(r)
+        map.set(gid, arr)
+      })
+    }
+    return map
+  }, [reservas])
+
+  const formatDateTime = (d: string) => {
+    try { return new Date(d).toLocaleString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) } catch { return d }
+  }
+
+  const mapEstado = (r: ReservaApi): { text: string; variant: "default"|"secondary"|"outline" } => {
+    if (r.checked_out_at) return { text: 'completada', variant: 'secondary' }
+    if (r.checked_in_at) return { text: 'en_progreso', variant: 'default' }
+    const e = (r.estado || r.status || '').toUpperCase()
+    if (e === 'CANCELADA' || e === 'NO_SHOW') return { text: 'cancelada', variant: 'outline' }
+    return { text: 'activa', variant: 'default' }
   }
 
   return (
@@ -112,11 +160,60 @@ const GuestsPage = () => {
                     <p className="text-base text-foreground">{guest.direccion || "Sin registrar"}</p>
                   </div>
                 </div>
-                <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-4">
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Historial de estadias</p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Aun no hay estadias asociadas. Se mostraran aqui cuando se conecte con el modulo de reservas.
-                  </p>
+                <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-0">
+                  <div className="px-4 pt-4">
+                    <p className="text-xs font-medium uppercase text-muted-foreground">Historial de estadias</p>
+                  </div>
+                  {/* Destacados: 2 más recientes */}
+                  {reservasIndex.get(guest.id) && reservasIndex.get(guest.id)!.length > 0 ? (
+                    <div className="px-4 pb-2 space-y-2">
+                      {reservasIndex.get(guest.id)!
+                        .slice()
+                        .sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime())
+                        .slice(0, 2)
+                        .map((r) => {
+                          const est = mapEstado(r)
+                          const camas = (r.camas_detalle || []).map((c) => c.cama_numero).filter((n): n is number => typeof n === 'number')
+                          return (
+                            <div key={`top-${guest.id}-${r.id}`} className="flex items-center justify-between rounded bg-white/70 border px-3 py-2">
+                              <div>
+                                <div className="text-xs text-muted-foreground">#{r.id} · Camas {camas.join(', ') || '-'} </div>
+                                <div className="text-sm">{formatDateTime(r.check_in)} → {formatDateTime(r.check_out)}</div>
+                              </div>
+                              <Badge variant={est.variant}>{est.text}</Badge>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  ) : (
+                    <div className="px-4 pb-4">
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Aun no hay estadias asociadas.
+                      </p>
+                    </div>
+                  )}
+                  {/* Lista scrolleable */}
+                  {reservasIndex.get(guest.id) && reservasIndex.get(guest.id)!.length > 2 && (
+                    <div className="max-h-40 overflow-y-auto border-t">
+                      {reservasIndex.get(guest.id)!
+                        .slice()
+                        .sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime())
+                        .slice(2)
+                        .map((r) => {
+                          const est = mapEstado(r)
+                          const camas = (r.camas_detalle || []).map((c) => c.cama_numero).filter((n): n is number => typeof n === 'number')
+                          return (
+                            <div key={`rest-${guest.id}-${r.id}`} className="flex items-center justify-between px-4 py-2 border-b last:border-0 bg-white/40">
+                              <div>
+                                <div className="text-xs text-muted-foreground">#{r.id} · Camas {camas.join(', ') || '-'}</div>
+                                <div className="text-xs">{formatDateTime(r.check_in)} → {formatDateTime(r.check_out)}</div>
+                              </div>
+                              <Badge variant={est.variant}>{est.text}</Badge>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
