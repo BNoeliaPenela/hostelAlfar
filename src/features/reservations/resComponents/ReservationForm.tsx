@@ -77,10 +77,13 @@ export function ReservationForm({
   const localToday = new Date(today.getTime() - timezoneOffsetMs)
   const todayDateStr = localToday.toISOString().split('T')[0]
   const nowTimeStr = today.toTimeString().slice(0,5)
+  const phoneOk = (p: string) => (p || "").replace(/\D/g, "").length >= 7
+  const dniOk = (d: string) => (d || "").replace(/\D/g, "").length >= 6
   const isFormValid = () => {
-    return checkInDate && 
-           checkOutDate && 
-           guests.every(g => g.bedNumber !== null && g.name && g.lastName && g.dni)
+    const timesOk = Boolean(checkInDate && checkOutDate && checkInTime && checkOutTime)
+    const bedsOk = guests.every(g => g.bedNumber !== null) && assignedBedsCount === guestCount
+    const guestsOk = guests.every(g => g.name && g.lastName && g.dni && dniOk(g.dni) && phoneOk(g.telefono) && (g as any).direccion)
+    return timesOk && bedsOk && guestsOk
   }
   const assignedBedsCount = guests.filter(g => g.bedNumber !== null).length
 
@@ -306,6 +309,9 @@ export function ReservationForm({
                     <Input
                       value={guest.dni}
                       onChange={(e) => updateGuest(index, "dni", e.target.value)}
+                      inputMode="numeric"
+                      pattern="\\d{6,}"
+                      title="Solo numeros (6+ digitos)"
                       placeholder="12345678"
                       required
                     />
@@ -316,7 +322,11 @@ export function ReservationForm({
                     <Input
                       value={guest.telefono}
                       onChange={(e) => updateGuest(index, "telefono", e.target.value)}
+                      inputMode="tel"
+                      pattern="\\d{7,}"
+                      title="Minimo 7 digitos"
                       placeholder=""
+                      required
                     />
                   </div>
                   <div>
@@ -329,6 +339,17 @@ export function ReservationForm({
                     />
                   </div>
                 </div>
+                </div>
+
+                {/* Direccion */}
+                <div>
+                  <Label>Direccion</Label>
+                  <Input
+                    value={(guest as any).direccion || ""}
+                    onChange={(e) => updateGuest(index, "direccion", e.target.value)}
+                    placeholder="Calle 123, Ciudad"
+                    required
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

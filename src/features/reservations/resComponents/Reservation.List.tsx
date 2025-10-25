@@ -8,9 +8,10 @@ interface ReservationsListProps {
   onDelete: (id: number) => void
   onCheckIn: (id: number) => void
   onCheckOut: (id: number) => void
+  onExtend: (id: number) => void
 }
 
-export function ReservationsList({ reservations, formatDate, onEdit, onDelete, onCheckIn, onCheckOut }: ReservationsListProps) {
+export function ReservationsList({ reservations, formatDate, onEdit, onDelete, onCheckIn, onCheckOut, onExtend }: ReservationsListProps) {
   return (
     <div className="grid gap-4">
       {reservations.map((reservation) => (
@@ -22,6 +23,7 @@ export function ReservationsList({ reservations, formatDate, onEdit, onDelete, o
           onDelete={onDelete}
           onCheckIn={onCheckIn}
           onCheckOut={onCheckOut}
+          onExtend={onExtend}
         />
       ))}
     </div>

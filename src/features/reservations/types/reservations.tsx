@@ -14,6 +14,7 @@ export interface GuestData {
   dni: string
   email: string
   telefono: string
+  direccion: string
   origin: string
   license: string
   notes: string

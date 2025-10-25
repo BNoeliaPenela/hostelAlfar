@@ -7,7 +7,7 @@ import {
 import { Button } from "../../../components/ui/Button"
 import { Badge } from "../../../components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/Card"
-import { Calendar, Bed, User, Mail, MapPin, Car, FileText, Coffee } from "lucide-react"
+import { Calendar, Bed, User, Mail, MapPin, Car, FileText, Coffee, Home } from "lucide-react"
 import type { reservation } from "../types/reservations"
 
 
@@ -125,6 +125,16 @@ export function ResDetailsModal({
                           <p className="text-sm text-gray-700">{guest.origin}</p>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {(guest as any).direccion && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-500 uppercase font-medium flex items-center gap-1">
+                        <Home className="h-3 w-3" />
+                        Direcci3n
+                      </p>
+                      <p className="text-sm text-gray-700">{(guest as any).direccion}</p>
                     </div>
                   )}
 

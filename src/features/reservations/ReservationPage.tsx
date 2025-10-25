@@ -41,6 +41,7 @@ export default function ReservationPage() {
     bulkCheckIn,
     markNoShow,
     snoozeReservation,
+    handleExtendReservation,
   } = useReservations()
 
   const formatDate = (date: Date) => date.toLocaleDateString("es-ES", {
@@ -72,57 +73,6 @@ export default function ReservationPage() {
   const toggleSelectAllPending = () => {
     setSelectedPendingIds((prev: number[]) => prev.length === allPendingIds.length ? [] : allPendingIds)
   }
-// Handler para crear reserva
-  /*const handleCreateReservation = () => { //
-    addReservation({
-      id: 0,
-      guestName: guests.map(g => g.name).join(", "),
-      checkIn: new Date(checkInDate),
-      checkOut: new Date(checkOutDate),
-      bedNumber: selectedBed,
-      status: "activa",
-      guests: guests.length
-    });
-    setIsNewReservationOpen(false);
-    // Opcional: limpia los campos si quieres
-  };*/
-
-  /*return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Reservas Activas</h2>
-        <Button onClick={() => setIsNewReservationOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Reserva
-        </Button>
-      </div>
-
-      <div className="grid gap-4">
-        {reservations.map((reservation) => (
-          <ReservationCard key={reservation.id} reservation={reservation} formatDate={formatDate} />
-        ))}
-      </div>
-
-      <ReservationForm
-        isOpen={isNewReservationOpen}
-        onOpenChange={setIsNewReservationOpen}
-        checkInDate={checkInDate}
-        setCheckInDate={setCheckInDate}
-        checkOutDate={checkOutDate}
-        setCheckOutDate={setCheckOutDate}
-        guestCount={guestCount}
-        handleGuestCountChange={handleGuestCountChange}
-        guests={guests}
-        updateGuest={updateGuest}
-        toggleAmenity={toggleAmenity}
-        removeGuest={removeGuest}
-        availableBeds={availableBeds}
-        onCreateReservation={handleCreateReservation}
-        selectedBed={selectedBed}         // <-- valor actual
-        selectBed={setSelectedBed}        // <-- función para cambiar cama
-      />
-    </div>
-  )*/
  return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -205,17 +155,18 @@ export default function ReservationPage() {
         <div className="space-y-4">
           <h3 className="text-xl font-semibold text-gray-900">Reservas Activas</h3>
           <div className="grid gap-4">
-            {activeReservations.map((reservation) => (
-              <ReservationCard 
-                key={reservation.id} 
-                reservation={reservation} 
-                formatDate={formatDate}
-                onEdit={openEditReservation}
-                onDelete={removeReservation}
-                onCheckIn={handleCheckIn}
-                onCheckOut={handleCheckOut}
-              />
-            ))}
+              {activeReservations.map((reservation) => (
+                <ReservationCard 
+                  key={reservation.id} 
+                  reservation={reservation} 
+                  formatDate={formatDate}
+                  onEdit={openEditReservation}
+                  onDelete={removeReservation}
+                  onCheckIn={handleCheckIn}
+                  onCheckOut={handleCheckOut}
+                  onExtend={handleExtendReservation}
+                />
+              ))}
           </div>
         </div>
       )}
@@ -225,17 +176,18 @@ export default function ReservationPage() {
         <div className="space-y-4">
           <h3 className="text-xl font-semibold text-gray-900">Reservas Completadas</h3>
           <div className="grid gap-4">
-            {completedReservations.map((reservation) => (
-              <ReservationCard 
-                key={reservation.id} 
-                reservation={reservation} 
-                formatDate={formatDate}
-                onEdit={openEditReservation}
-                onDelete={removeReservation}
-                onCheckIn={handleCheckIn}
-                onCheckOut={handleCheckOut}
-              />
-            ))}
+              {completedReservations.map((reservation) => (
+                <ReservationCard 
+                  key={reservation.id} 
+                  reservation={reservation} 
+                  formatDate={formatDate}
+                  onEdit={openEditReservation}
+                  onDelete={removeReservation}
+                  onCheckIn={handleCheckIn}
+                  onCheckOut={handleCheckOut}
+                  onExtend={handleExtendReservation}
+                />
+              ))}
           </div>
         </div>
       )}

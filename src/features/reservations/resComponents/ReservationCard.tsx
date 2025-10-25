@@ -2,7 +2,7 @@ import type { reservation } from "../types/reservations"
 import { Card, CardContent } from "../../../components/ui/Card"
 import { Badge } from "../../../components/ui/Badge"
 import { Button } from "../../../components/ui/Button"
-import { Users, Edit, Trash2, Bed, Eye, LogIn, LogOut, Sparkles } from "lucide-react"
+import { Users, Edit, Trash2, Bed, Eye, LogIn, LogOut, Sparkles, Clock } from "lucide-react"
 import { useState } from "react"
 import { ResDetailsModal } from "./ResDetailsModal"
 import { cleanBedsByNumbers } from "../services/reservationService"
@@ -14,6 +14,7 @@ interface ReservationCardProps {
   onDelete: (id: number) => void
   onCheckIn: (id: number) => void
   onCheckOut: (id: number) => void
+  onExtend: (id: number) => void
 }
 export function ReservationCard({ 
   reservation, 
@@ -21,7 +22,8 @@ export function ReservationCard({
   onEdit, 
   onDelete,
   onCheckIn,
-  onCheckOut 
+  onCheckOut,
+  onExtend,
  }: ReservationCardProps) {
   
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
@@ -56,8 +58,8 @@ export function ReservationCard({
     .filter(bed => bed !== null)
     .join(", ")
      // Determina qué botones mostrar según el estado
-  const showCheckIn = reservation.status === "activa"
-  const showCheckOut = reservation.status === "en_progreso"
+  const showCheckIn = !reservation.realCheckInDateTime
+  const showCheckOut = !!reservation.realCheckInDateTime && reservation.status !== 'completada'
   const canCheckOut = reservation.realCheckInDateTime
     ? Date.now() >= (reservation.realCheckInDateTime.getTime() + 60 * 60 * 1000)
     : false
@@ -164,6 +166,17 @@ export function ReservationCard({
                   >
                     <LogOut className="h-4 w-4 mr-1" />
                     CHECK OUT
+                  </Button>
+                )}
+                {(reservation.status === 'activa' || reservation.status === 'en_progreso') && (
+                  <Button
+                    onClick={() => onExtend(reservation.id)}
+                    variant="outline"
+                    size="sm"
+                    title="Extender estancia"
+                  >
+                    <Clock className="h-4 w-4 mr-1" />
+                    Extender
                   </Button>
                 )}
                 {reservation.status === 'completada' && (

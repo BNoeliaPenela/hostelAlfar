@@ -69,10 +69,14 @@ export const useBeds = () => {
 
     const handleCleanSelected = useCallback(async () => {
         if (!selectedBed) return
+        if (!window.confirm('¿Marcar esta cama como limpia?')) return
         setStatusUpdating(true)
         setError(null)
         try {
-            await cleanBed(selectedBed.backendId)
+            const cleaned = await cleanBed(selectedBed.backendId)
+            if (cleaned.status !== 'libre' && cleaned.status !== 'proceso') {
+                setError('La cama no quedó LIBRE tras limpiar, puede existir una reserva en curso. Verifica el check-out.')
+            }
             await loadBeds()
         } catch (err) {
             console.error("Error limpiando cama:", err)

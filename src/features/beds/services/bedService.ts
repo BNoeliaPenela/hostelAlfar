@@ -44,14 +44,42 @@ const normalizeGuest = (guest?: RawGuest | null) => {
   }
 }
 
+const parseLocal = (value?: string | null): Date | null => {
+  if (!value) return null
+  const m = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (!m) {
+    const d = new Date(value.replace(' ', 'T'))
+    return isNaN(d.getTime()) ? null : d
+  }
+  const [_, y, mo, d, h, mi, s] = m
+  return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), s ? Number(s) : 0)
+}
+
 const mapBedFromApi = (bed: BedApiModel): BedData => {
-  const effectiveStatus = (bed.estado_actual || bed.estado) as BedApiStatus
-  const status = API_TO_UI_STATUS[effectiveStatus] ?? "libre"
+  const rawStatus = (bed.estado_actual || bed.estado) as BedApiStatus
+  let status = API_TO_UI_STATUS[rawStatus] ?? "libre"
+
+  // Override temporal: si hay reserva asignada y estamos en ventana de check-in
+  // mantener "proceso" hasta que ocurra el check-in real, aunque el backend marque limpieza.
+  const r = bed.reserva_actual ?? null
+  if (r) {
+    const now = Date.now()
+    const ci = parseLocal(r.check_in)?.getTime() ?? null
+    const co = parseLocal(r.check_out)?.getTime() ?? null
+    const soonWindowMs = 20 * 60 * 1000 // 20 min antes del check-in
+    if (ci && co) {
+      const withinWindow = now >= (ci - soonWindowMs) && now < co
+      if (withinWindow && (rawStatus === 'PARA_LIMPIAR' || rawStatus === 'LIBRE')) {
+        status = 'proceso'
+      }
+    }
+  }
+
   return {
     id: bed.numero,
     backendId: bed.id,
     status,
-    backendStatus: effectiveStatus,
+    backendStatus: rawStatus,
     guest: normalizeGuest(bed.reserva_actual ?? undefined),
   }
 }

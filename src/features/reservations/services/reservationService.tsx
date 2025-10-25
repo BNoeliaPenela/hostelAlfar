@@ -34,7 +34,12 @@ async function ensureBedsMap(): Promise<Map<number, number>> {
 }
 
 function cleanDoc(dni: string): string {
-  return (dni || "").replace(/[^0-9A-Za-z]/g, "").trim()
+  // El backend guarda documento sin separadores; usamos solo dígitos
+  return (dni || "").replace(/\D/g, "").trim()
+}
+
+function cleanPhone(phone: string): string {
+  return (phone || "").replace(/\D/g, "").trim()
 }
 
 async function findOrCreateClient(guest: GuestData): Promise<number> {
@@ -50,10 +55,10 @@ async function findOrCreateClient(guest: GuestData): Promise<number> {
   } catch { /* continuar a crear */ }
 
   const payload = {
-    nombre: guest.name || "-",
-    apellido: guest.lastName || "-",
+    nombre: guest.name || "N/A",
+    apellido: guest.lastName || "N/A",
     documento: documento,
-    telefono: (guest as any).telefono || "-",
+    telefono: cleanPhone((guest as any).telefono || ""),
     patente: guest.license || null,
   }
   const created = await apiClient.post(`/clientes/`, payload)
@@ -69,6 +74,42 @@ function formatToBackend(dt: Date): string {
   const hours = pad(dt.getHours())
   const minutes = pad(dt.getMinutes())
   return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
+function addMonths(d: Date, months: number) {
+  const copy = new Date(d.getTime())
+  copy.setMonth(copy.getMonth() + months)
+  return copy
+}
+
+function validateStayWindow(ci: Date, co: Date): string | null {
+  if (!(ci instanceof Date) || isNaN(ci.getTime()) || !(co instanceof Date) || isNaN(co.getTime())) return 'Fechas inválidas'
+  if (co.getTime() <= ci.getTime()) return 'El check-out debe ser posterior al check-in'
+  const durationMs = co.getTime() - ci.getTime()
+  if (durationMs < 60 * 60 * 1000) return 'La estadía mínima es de 1 hora'
+  if (durationMs > 30 * 24 * 60 * 60 * 1000) return 'La estadía máxima es de 30 días'
+  const now = new Date()
+  if (ci.getTime() < now.getTime() - 60 * 60 * 1000) return 'El check-in no puede estar en el pasado por más de 1 hora'
+  const limit = addMonths(now, 6)
+  if (ci.getTime() > limit.getTime() || co.getTime() > limit.getTime()) return 'Las fechas no pueden superar los 6 meses desde hoy'
+  return null
+}
+
+function parseBackendError(err: any): never {
+  const data = err?.response?.data
+  if (!data) throw err
+  if (typeof data === 'string') throw new Error(data)
+  try {
+    const parts: string[] = []
+    Object.entries(data).forEach(([k, v]) => {
+      if (Array.isArray(v)) parts.push(`${k}: ${v.join(', ')}`)
+      else if (typeof v === 'string') parts.push(`${k}: ${v}`)
+      else parts.push(`${k}: ${JSON.stringify(v)}`)
+    })
+    throw new Error(parts.join('\n') || 'Error en la solicitud')
+  } catch {
+    throw err
+  }
 }
 
 function mapApiEstadoToUi(r: ReservaApi): reservation["status"] {
@@ -97,24 +138,39 @@ function mapApiEstadoToUi(r: ReservaApi): reservation["status"] {
 export async function fetchReservations(): Promise<reservation[]> {
   try {
     const { data } = await apiClient.get(`/reservas/`)
+    const nowTs = Date.now()
+    const soonWindowMs = 20 * 60 * 1000
     return (data as ReservaApi[]).map((r) => {
-      const guestDetails: GuestData[] = (r.camas_detalle || []).map((c: CamaDetalle) => ({
-        name: (c.cliente_nombre || "").split(" ")[0] || "",
-        lastName: (c.cliente_nombre || "").split(" ").slice(1).join(" ") || "",
-        dni: "",
-        email: "",
-        telefono: "",
-        origin: "",
-        license: "",
-        notes: "",
-        breakfast: false,
-        bedNumber: c.cama_numero ?? null,
-      }))
+  const guestDetails: GuestData[] = (r.camas_detalle || []).map((c: CamaDetalle) => ({
+    name: (c.cliente_nombre || "").split(" ")[0] || "",
+    lastName: (c.cliente_nombre || "").split(" ").slice(1).join(" ") || "",
+    dni: "",
+    email: "",
+    telefono: "",
+    direccion: "",
+    origin: "",
+    license: "",
+    notes: "",
+    breakfast: false,
+    bedNumber: c.cama_numero ?? null,
+  }))
+      // Estado base segun backend
+      let uiStatus = mapApiEstadoToUi(r)
+      // Si aún no hizo check-in pero está dentro de la ventana previa al check-in, mostrar "en_progreso" en UI
+      if (!r.checked_in_at && !r.checked_out_at) {
+        const ci = new Date(r.check_in).getTime()
+        if (!isNaN(ci) && nowTs >= (ci - soonWindowMs)) {
+          // Mantener cancelada si corresponde
+          const e = (r.estado || r.status || "").toString().toUpperCase()
+          if (e !== 'CANCELADA' && e !== 'NO_SHOW') uiStatus = 'en_progreso'
+        }
+      }
+
       return {
         id: r.id,
         checkIn: new Date(r.check_in),
         checkOut: new Date(r.check_out),
-        status: mapApiEstadoToUi(r),
+        status: uiStatus,
         guests: Math.max(guestDetails.length, (r.huespedes?.length || 0)),
         guestDetails,
         realCheckInDateTime: r.checked_in_at ? new Date(r.checked_in_at) : null,
@@ -182,6 +238,12 @@ export async function createReservation(formData: Omit<reservation, 'id'> & { se
     return { cliente: clienteId, cama: camaId }
   }))
 
+  // Validar fechas para evitar 400 desde el backend
+  const ci = formData.checkIn
+  const co = formData.checkOut
+  const dateErr = validateStayWindow(ci, co)
+  if (dateErr) throw new Error(dateErr)
+
   const payload: Record<string, any> = {
     cliente: titularId,
     huespedes: otherIds,
@@ -189,16 +251,26 @@ export async function createReservation(formData: Omit<reservation, 'id'> & { se
     check_in: formatToBackend(formData.checkIn),
     check_out: formatToBackend(formData.checkOut),
   }
-  if (typeof formData.senia !== 'undefined') payload.senia = formData.senia
+  if (typeof formData.senia !== 'undefined') {
+    const val = typeof formData.senia === 'number' ? formData.senia : Number(formData.senia)
+    if (!isNaN(val)) payload.senia = val.toFixed(2)
+  }
   if (formData.notas && formData.notas.trim() !== '') payload.notas = formData.notas
 
-  const { data } = await apiClient.post(`/reservas/`, payload)
+  let data: any
+  try {
+    const resp = await apiClient.post(`/reservas/`, payload)
+    data = resp.data
+  } catch (err) {
+    parseBackendError(err)
+  }
   const guestDetails: GuestData[] = ((data as ReservaApi).camas_detalle || []).map((c: CamaDetalle) => ({
     name: (c.cliente_nombre || "").split(" ")[0] || "",
     lastName: (c.cliente_nombre || "").split(" ").slice(1).join(" ") || "",
     dni: "",
     email: "",
     telefono: "",
+    direccion: "",
     origin: "",
     license: "",
     notes: "",
@@ -242,6 +314,10 @@ export async function updateReservation(id: number, reservation: reservation): P
     const notas = (reservation as any).notas as string | undefined
     if (notas && notas.trim() !== '') payload.notas = notas
 
+    // Validar fechas locales
+    const dateErr = validateStayWindow(reservation.checkIn, reservation.checkOut)
+    if (dateErr) throw new Error(dateErr)
+
     const { data } = await apiClient.patch<ReservaApi>(`/reservas/${id}/`, payload)
     return {
       id: data.id,
@@ -253,7 +329,7 @@ export async function updateReservation(id: number, reservation: reservation): P
     }
   } catch (error) {
     console.error('Error:', error)
-    throw error
+    parseBackendError(error)
   }
 }
 
@@ -312,4 +388,36 @@ export async function cleanBedsByNumbers(bedNumbers: number[]): Promise<void> {
 export async function fetchReservationsRaw(): Promise<ReservaApi[]> {
   const { data } = await apiClient.get(`/reservas/`)
   return (Array.isArray(data) ? data : []) as ReservaApi[]
+}
+
+// Fuerza recálculo de estados de reservas/camas en backend
+export async function refreshReservationStates(): Promise<void> {
+  try {
+    await apiClient.get(`/reservas/actualizar_estados/`)
+  } catch (e) {
+    // no bloquear flujo por este recálculo
+    console.warn('No se pudo actualizar estados:', e)
+  }
+}
+
+// Verificar si se puede extender una reserva hasta newCheckOut manteniendo las mismas camas
+export async function checkExtensionAvailability(res: reservation, newCheckOut: Date): Promise<{ ok: boolean; unavailableBeds: number[]; alternatives: number[] }> {
+  const available = await fetchAvailableBeds(formatToBackend(res.checkIn), formatToBackend(newCheckOut))
+  const currentBeds = res.guestDetails.map(g => g.bedNumber).filter((n): n is number => typeof n === 'number')
+  const unavailable = currentBeds.filter(n => !available.includes(n))
+  return { ok: unavailable.length === 0, unavailableBeds: unavailable, alternatives: available }
+}
+
+// Extiende la reserva actualizando solo el check_out (backend mantiene camas y huéspedes)
+export async function extendReservation(id: number, newCheckOut: Date): Promise<reservation> {
+  const payload = { check_out: formatToBackend(newCheckOut) }
+  const { data } = await apiClient.patch<ReservaApi>(`/reservas/${id}/`, payload)
+  return {
+    id: data.id,
+    checkIn: new Date(data.check_in),
+    checkOut: new Date(data.check_out),
+    status: mapApiEstadoToUi(data),
+    guests: 0, // se calculará en la UI desde guestDetails si es necesario
+    guestDetails: [],
+  }
 }
