@@ -200,7 +200,7 @@ export function ReservationForm({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="z-50">
+                <SelectContent>
                   {[1, 2, 3, 4, 5, 6]
                     .filter(num => num <= availableBeds.length || availableBeds.length === 0)
                     .map((num) => (
@@ -269,7 +269,7 @@ export function ReservationForm({
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona una cama" />
                     </SelectTrigger>
-                    <SelectContent className="z-40">
+                    <SelectContent>
                       {getAvailableBedsForGuest(index).map((bed) => (
                         <SelectItem key={bed} value={bed.toString()}>
                           <div className="flex items-center gap-2">

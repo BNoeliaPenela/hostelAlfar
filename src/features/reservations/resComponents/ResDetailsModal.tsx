@@ -9,7 +9,8 @@ import { Badge } from "../../../components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/Card"
 import { Calendar, Bed, User, Mail, MapPin, Car, FileText, Coffee, Home } from "lucide-react"
 import type { reservation } from "../types/reservations"
-
+import { useEffect, useState } from "react"
+import { fetchReservationById } from "../services/reservationService"
 
 interface ResDetailsModalProps {
   isOpen: boolean
@@ -24,13 +25,45 @@ export function ResDetailsModal({
   reservation,
   formatDate,
 }: ResDetailsModalProps) {
+  const [res, setRes] = useState<reservation>(reservation)
+
+  const getStatusText = (status: reservation["status"]) => {
+    switch (status) {
+      case "en_progreso":
+        return "Activa"
+      case "activa":
+        return "Activa"
+      case "completada":
+        return "Completada"
+      case "cancelada":
+        return "Cancelada"
+      default:
+        return status
+    }
+  }
+
+  useEffect(() => {
+    setRes(reservation)
+    if (isOpen && reservation?.id) {
+      fetchReservationById(reservation.id)
+        .then((full) => {
+          setRes((prev) => ({
+            ...prev,
+            ...full,
+            guestDetails: full.guestDetails?.length ? full.guestDetails : prev.guestDetails,
+          }))
+        })
+        .catch(() => {})
+    }
+  }, [isOpen, reservation])
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl">
             <Calendar className="h-6 w-6" />
-            Detalles de la Reserva #{reservation.id}
+            Detalles de la Reserva #{res.id}
           </DialogTitle>
         </DialogHeader>
 
@@ -41,24 +74,20 @@ export function ResDetailsModal({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Check-in</p>
-                  <p className="font-semibold text-lg">
-                    {formatDate(reservation.checkIn)}
-                  </p>
+                  <p className="font-semibold text-lg">{formatDate(res.checkIn)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Check-out</p>
-                  <p className="font-semibold text-lg">
-                    {formatDate(reservation.checkOut)}
-                  </p>
+                  <p className="font-semibold text-lg">{formatDate(res.checkOut)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Total de huéspedes</p>
-                  <p className="font-semibold text-lg">{reservation.guests}</p>
+                  <p className="font-semibold text-lg">{res.guests}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Estado</p>
                   <Badge variant="default" className="text-sm">
-                    {reservation.status}
+                    {getStatusText(res.status)}
                   </Badge>
                 </div>
               </div>
@@ -67,11 +96,9 @@ export function ResDetailsModal({
 
           {/* Detalles de cada huésped */}
           <div className="space-y-4">
-            <h3 className="font-semibold text-lg text-gray-900">
-              Información de huéspedes
-            </h3>
+            <h3 className="font-semibold text-lg text-gray-900">Información de huéspedes</h3>
 
-            {reservation.guestDetails.map((guest, idx) => (
+            {res.guestDetails.map((guest, idx) => (
               <Card key={idx} className="border-2">
                 <CardHeader className="bg-gray-50 pb-3">
                   <CardTitle className="text-base flex items-center justify-between">
@@ -89,17 +116,13 @@ export function ResDetailsModal({
                   {/* Datos personales */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <p className="text-xs text-gray-500 uppercase font-medium">
-                        Nombre completo
-                      </p>
+                      <p className="text-xs text-gray-500 uppercase font-medium">Nombre completo</p>
                       <p className="font-semibold text-gray-900">
                         {guest.name} {guest.lastName}
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-gray-500 uppercase font-medium">
-                        DNI
-                      </p>
+                      <p className="text-xs text-gray-500 uppercase font-medium">DNI</p>
                       <p className="font-semibold text-gray-900">{guest.dni}</p>
                     </div>
                   </div>
@@ -132,7 +155,7 @@ export function ResDetailsModal({
                     <div className="space-y-1">
                       <p className="text-xs text-gray-500 uppercase font-medium flex items-center gap-1">
                         <Home className="h-3 w-3" />
-                        Direcci3n
+                        Dirección
                       </p>
                       <p className="text-sm text-gray-700">{(guest as any).direccion}</p>
                     </div>

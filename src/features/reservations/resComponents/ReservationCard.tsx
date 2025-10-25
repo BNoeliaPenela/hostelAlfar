@@ -24,7 +24,7 @@ export function ReservationCard({
   onCheckIn,
   onCheckOut,
   onExtend,
- }: ReservationCardProps) {
+}: ReservationCardProps) {
   
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 
@@ -33,7 +33,7 @@ export function ReservationCard({
       case "activa":
         return "Activa"
       case "en_progreso":
-        return "En progreso"
+        return "Activa"
       case "completada":
         return "Completada"
       case "cancelada":
@@ -73,12 +73,12 @@ export function ReservationCard({
       .filter((n): n is number => typeof n === 'number')
     if (beds.length === 0) return
     await cleanBedsByNumbers(beds)
-    try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+    try { window.dispatchEvent(new Event('beds:reload')) } catch (e) { console.warn('Failed to dispatch beds:reload', e) }
     alert('Camas marcadas como limpias')
   }
 
   return (
-     <>
+<>
       <Card className="hover:shadow-lg transition-all">
         <CardContent className="p-5">
           <div className="space-y-3">

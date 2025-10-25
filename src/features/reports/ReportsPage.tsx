@@ -3,7 +3,7 @@ import { es } from "date-fns/locale"
 import { BedDouble, BarChart3, CalendarDays, PieChart, RefreshCcw } from "lucide-react"
 import { useMemo } from "react"
 import { useReports } from "./hooks/useReports"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select"
@@ -138,9 +138,6 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Reportes de ocupación</h2>
-        <p className="text-sm text-gray-500">
-          Consulta la ocupación diaria, mensual e histórica del hostel con los datos oficiales del backend.
-        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -164,9 +161,6 @@ export default function ReportsPage() {
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div>
                 <CardTitle>Ocupación diaria</CardTitle>
-                <CardDescription>
-                  Selecciona la fecha que deseas analizar. El porcentaje se calcula con la fórmula: {daily?.base ?? "segundos-ocupados / (camas * 86400)"}.
-                </CardDescription>
               </div>
               <Button
                 variant="outline"
@@ -219,7 +213,7 @@ export default function ReportsPage() {
                   <span>Periodo</span>
                   <span className="font-medium text-gray-900 text-right">{formatRange(daily.periodo_inicio, daily.periodo_fin)}</span>
                 </div>
-                <p className="text-xs text-gray-400">Base: {daily.base}</p>
+                
               </div>
             )}
           </CardContent>
@@ -231,9 +225,7 @@ export default function ReportsPage() {
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
                   <CardTitle>Ocupación mensual</CardTitle>
-                  <CardDescription>
-                    Analiza el mes seleccionado y revisa la ocupación acumulada y por día.
-                  </CardDescription>
+
                 </div>
                 <Button
                   variant="outline"
@@ -351,7 +343,7 @@ export default function ReportsPage() {
                   </div>
                 </div>
 
-                <p className="text-xs text-gray-400">Base: {monthly.base}</p>
+            
               </div>
             )}
           </CardContent>
@@ -363,9 +355,7 @@ export default function ReportsPage() {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
               <CardTitle>Ocupación histórica</CardTitle>
-              <CardDescription>
-                Consulta el rango completo o filtra por fechas específicas para evaluar la ocupación acumulada.
-              </CardDescription>
+              
             </div>
             <Button
               variant="outline"
@@ -428,7 +418,7 @@ export default function ReportsPage() {
                   {formatRange(total.periodo_inicio, total.periodo_fin)}
                 </span>
               </div>
-              <p className="text-xs text-gray-400">Base: {total.base}</p>
+            
             </div>
           )}
         </CardContent>

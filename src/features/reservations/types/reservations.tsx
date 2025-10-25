@@ -2,7 +2,7 @@ export interface reservation {
   id: number
   checkIn: Date
   checkOut: Date
-  status: "activa" | "completada" | "cancelada" | "en_progreso"
+  status: "activa" | "completada" | "cancelada" | "en_progreso"|"ocupada"
   guests: number
   guestDetails: GuestData[]
   realCheckInDateTime?: Date | null  // Fecha/hora real del check-in

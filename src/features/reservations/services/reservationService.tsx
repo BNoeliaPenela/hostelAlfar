@@ -5,7 +5,7 @@ import apiClient from "../../../lib/apiClient"
 
 // Tipos de respuesta del backend
 export type CamaDetalle = { cama_numero: number; cliente_nombre: string }
-export type PersonaDetalle = { id: number; nombre: string; apellido: string }
+export type PersonaDetalle = { id: number; nombre: string; apellido: string; documento?: string; telefono?: string; direccion?: string; patente?: string | null }
 export type ReservaApi = {
   id: number
   check_in: string
@@ -348,6 +348,110 @@ export async function checkInReservation(id: number, when?: Date): Promise<void>
     await apiClient.post(`/reservas/${id}/checkin/`, payload)
   } catch (error) {
     console.error('Error en check-in:', error)
+    throw error
+  }
+}
+
+// Obtiene una reserva por id y enriquece guestDetails con DNI/telefono/direccion cuando es posible
+export async function fetchReservationById(id: number): Promise<reservation> {
+  try {
+    const { data } = await apiClient.get<ReservaApi>(`/reservas/${id}/`)
+
+    // Base guestDetails a partir de camas_detalle (trae cama_numero + nombre)
+    const guestDetails: GuestData[] = (data.camas_detalle || []).map((c: CamaDetalle) => {
+      const full = (c.cliente_nombre || "").trim()
+      const parts = full.split(" ")
+      const name = parts[0] || ""
+      const lastName = parts.slice(1).join(" ") || ""
+      return {
+        name,
+        lastName,
+        dni: "",
+        email: "",
+        telefono: "",
+        direccion: "",
+        origin: "",
+        license: "",
+        notes: "",
+        breakfast: false,
+        bedNumber: typeof c.cama_numero === 'number' ? c.cama_numero : null,
+      }
+    })
+
+    // Mapa auxiliar: nombre normalizado -> índice en guestDetails
+    const norm = (s: string) => (s || "").normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
+    const byName = new Map<string, number>()
+    guestDetails.forEach((g, i) => byName.set(norm(`${g.name} ${g.lastName}`), i))
+
+    // Intentar enriquecer con cliente_detalle (titular)
+    const titular = data.cliente_detalle
+    if (titular) {
+      const key = norm(`${titular.nombre} ${titular.apellido}`)
+      const idx = byName.get(key)
+      const apply = (i: number) => {
+        guestDetails[i].dni = titular.documento || guestDetails[i].dni
+        ;(guestDetails[i] as any).telefono = titular.telefono || (guestDetails[i] as any).telefono
+        ;(guestDetails[i] as any).direccion = titular.direccion || (guestDetails[i] as any).direccion
+        guestDetails[i].license = (titular.patente || '') as string
+      }
+      if (typeof idx === 'number') apply(idx)
+      else {
+        // Si no está en camas_detalle, agregarlo sin cama
+        guestDetails.unshift({
+          name: titular.nombre,
+          lastName: titular.apellido,
+          dni: titular.documento || "",
+          email: "",
+          telefono: titular.telefono || "",
+          direccion: (titular as any).direccion || "",
+          origin: "",
+          license: (titular.patente || '') as string,
+          notes: "",
+          breakfast: false,
+          bedNumber: null,
+        })
+      }
+    }
+
+    // Enriquecer con huespedes_detalle consultando clientes por id (para obtener documento)
+    const hues = Array.isArray(data.huespedes_detalle) ? data.huespedes_detalle : []
+    if (hues.length > 0) {
+      const details = await Promise.all(
+        hues.map(async (h) => {
+          try {
+            const resp = await apiClient.get<any>(`/clientes/${h.id}/`)
+            return { h, c: resp.data }
+          } catch {
+            return { h, c: null as any }
+          }
+        })
+      )
+      details.forEach(({ h, c }) => {
+        const key = norm(`${h.nombre} ${h.apellido}`)
+        const idx = byName.get(key)
+        if (typeof idx === 'number') {
+          if (c) {
+            guestDetails[idx].dni = c.documento || guestDetails[idx].dni
+            ;(guestDetails[idx] as any).telefono = c.telefono || (guestDetails[idx] as any).telefono
+            ;(guestDetails[idx] as any).direccion = c.direccion || (guestDetails[idx] as any).direccion
+            guestDetails[idx].license = c.patente || guestDetails[idx].license
+          }
+        }
+      })
+    }
+
+    return {
+      id: data.id,
+      checkIn: new Date(data.check_in),
+      checkOut: new Date(data.check_out),
+      status: mapApiEstadoToUi(data),
+      guests: Math.max(guestDetails.length, (data.huespedes?.length || 0)),
+      guestDetails,
+      realCheckInDateTime: data.checked_in_at ? new Date(data.checked_in_at) : null,
+      realCheckOutDateTime: data.checked_out_at ? new Date(data.checked_out_at) : null,
+    }
+  } catch (error) {
+    console.error('Error:', error)
     throw error
   }
 }
