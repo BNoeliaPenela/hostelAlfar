@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react"
+import { Calendar, Bed, User, Mail, MapPin, Car, FileText, Coffee, Home } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -7,15 +9,13 @@ import {
 import { Button } from "../../../components/ui/Button"
 import { Badge } from "../../../components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/Card"
-import { Calendar, Bed, User, Mail, MapPin, Car, FileText, Coffee, Home } from "lucide-react"
 import type { reservation } from "../types/reservations"
-import { useEffect, useState } from "react"
 import { fetchReservationById } from "../services/reservationService"
 
 interface ResDetailsModalProps {
   isOpen: boolean
   onClose: () => void
-  reservation: reservation
+  reservation?: reservation | null
   formatDate: (date: Date) => string
 }
 
@@ -25,12 +25,13 @@ export function ResDetailsModal({
   reservation,
   formatDate,
 }: ResDetailsModalProps) {
-  const [res, setRes] = useState<reservation>(reservation)
+  const [res, setRes] = useState<reservation | null>(reservation ?? null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
+  const [detailsError, setDetailsError] = useState<string | null>(null)
 
   const getStatusText = (status: reservation["status"]) => {
     switch (status) {
       case "en_progreso":
-        return "Activa"
       case "activa":
         return "Activa"
       case "completada":
@@ -43,27 +44,58 @@ export function ResDetailsModal({
   }
 
   useEffect(() => {
-    setRes(reservation)
+    let active = true
+    setRes(reservation ?? null)
+    setDetailsError(null)
+
     if (isOpen && reservation?.id) {
+      setLoadingDetails(true)
       fetchReservationById(reservation.id)
         .then((full) => {
-          setRes((prev) => ({
-            ...prev,
-            ...full,
-            guestDetails: full.guestDetails?.length ? full.guestDetails : prev.guestDetails,
-          }))
+          if (!active) return
+          setRes((prev) => {
+            const base = prev ?? reservation
+            return {
+              ...base,
+              ...full,
+              guestDetails: full.guestDetails?.length ? full.guestDetails : base?.guestDetails ?? [],
+            }
+          })
         })
-        .catch(() => {})
+        .catch((error) => {
+          if (!active) return
+          console.error("No se pudo cargar la reserva completa:", error)
+          setDetailsError("No pudimos cargar todos los datos. Intenta nuevamente.")
+        })
+        .finally(() => {
+          if (active) setLoadingDetails(false)
+        })
+    } else {
+      setLoadingDetails(false)
+    }
+
+    return () => {
+      active = false
     }
   }, [isOpen, reservation])
 
+  const currentReservation = res ?? reservation
+  if (!currentReservation) return null
+
+  const guests = currentReservation.guestDetails ?? []
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl">
             <Calendar className="h-6 w-6" />
-            Detalles de la Reserva #{res.id}
+            Detalles de la Reserva #{currentReservation.id}
           </DialogTitle>
         </DialogHeader>
 
@@ -74,32 +106,42 @@ export function ResDetailsModal({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Check-in</p>
-                  <p className="font-semibold text-lg">{formatDate(res.checkIn)}</p>
+                  <p className="font-semibold text-lg">{formatDate(currentReservation.checkIn)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Check-out</p>
-                  <p className="font-semibold text-lg">{formatDate(res.checkOut)}</p>
+                  <p className="font-semibold text-lg">{formatDate(currentReservation.checkOut)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Total de huéspedes</p>
-                  <p className="font-semibold text-lg">{res.guests}</p>
+                  <p className="font-semibold text-lg">{currentReservation.guests}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Estado</p>
                   <Badge variant="default" className="text-sm">
-                    {getStatusText(res.status)}
+                    {getStatusText(currentReservation.status)}
                   </Badge>
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {detailsError && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              {detailsError}
+            </div>
+          )}
+
           {/* Detalles de cada huésped */}
           <div className="space-y-4">
             <h3 className="font-semibold text-lg text-gray-900">Información de huéspedes</h3>
 
-            {res.guestDetails.map((guest, idx) => (
-              <Card key={idx} className="border-2">
+            {guests.length === 0 && !loadingDetails && (
+              <p className="text-sm text-gray-500">Aún no hay huéspedes asociados a esta reserva.</p>
+            )}
+
+            {guests.map((guest, idx) => (
+              <Card key={`${guest.dni || idx}-${guest.bedNumber ?? "na"}`} className="border-2">
                 <CardHeader className="bg-gray-50 pb-3">
                   <CardTitle className="text-base flex items-center justify-between">
                     <span className="flex items-center gap-2">
@@ -108,7 +150,7 @@ export function ResDetailsModal({
                     </span>
                     <Badge variant="secondary" className="flex items-center gap-1">
                       <Bed className="h-3 w-3" />
-                      Cama {guest.bedNumber}
+                      Cama {guest.bedNumber ?? "Sin asignar"}
                     </Badge>
                   </CardTitle>
                 </CardHeader>
@@ -197,6 +239,10 @@ export function ResDetailsModal({
             ))}
           </div>
 
+          {loadingDetails && (
+            <p className="text-sm text-gray-500 text-center">Actualizando información...</p>
+          )}
+
           {/* Botón cerrar */}
           <div className="flex justify-end pt-4 border-t">
             <Button onClick={onClose} size="lg">
@@ -208,4 +254,3 @@ export function ResDetailsModal({
     </Dialog>
   )
 }
-
