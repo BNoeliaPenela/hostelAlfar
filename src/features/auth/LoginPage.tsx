@@ -6,32 +6,11 @@ import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { useLoginForm } from "./hooks/useLoginForm";
 
-/*const fakeUsers = [
-  { username: "noe", password: "1234" },
-  { username: "shei", password: "abcd" },
-];*/
+
 
 function LoginPage() {
   const { error, credentials, setCredentials, handleLogin } = useLoginForm();
-  /*const [error, setError] = useState("");
-  const [credentials, setCredentials] = useState({ username: "", password: "" });
-  const nav = useNavigate();
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const user = fakeUsers.find(
-      (u) => u.username === credentials.username && u.password === credentials.password
-    );
-
-    if (user) {
-      setError("");
-      sessionStorage.setItem("authed", "true"); // guardamos estado de login
-      nav("/home"); // redirigimos al dashboard
-    } else {
-      setError("Usuario o contraseña incorrectos");
-    }
-  };*/
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-200 to-indigo-100 flex items-center justify-center p-4">
