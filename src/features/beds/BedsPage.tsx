@@ -2,10 +2,12 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { ConfirmModal } from "@/features/reservations/resComponents/ConfirmModal";
 import { HostelSection } from "@/features/beds/bedComponents/HostelSection";
 import { useBeds } from "@/features/beds/hooks/useBeds";
 import type { BedStatus } from "@/features/beds/types/beds";
 import { HOSTEL_LAYOUT, statusColors, statusLabels } from "@/lib/bedsConst";
+import { useState } from "react";
 
 const STATUS_ORDER: BedStatus[] = ["libre", "ocupada", "limpieza", "proceso"];
 
@@ -24,6 +26,24 @@ export function BedsPage() {
     error,
     handleCleanSelected,
   } = useBeds();
+
+  const [isCleanConfirmOpen, setIsCleanConfirmOpen] = useState(false);
+  const [cleanModalError, setCleanModalError] = useState<string | null>(null);
+
+  const openCleanConfirm = () => {
+    setCleanModalError(null);
+    setIsCleanConfirmOpen(true);
+  };
+
+  const confirmClean = async () => {
+    setCleanModalError(null);
+    const result = await handleCleanSelected();
+    if (result.ok) {
+      setIsCleanConfirmOpen(false);
+    } else {
+      setCleanModalError(result.message || "No pudimos limpiar la cama. Intenta nuevamente.");
+    }
+  };
 
   return (
     <div className="space-y-6 p-4 lg:p-0">
@@ -117,7 +137,7 @@ export function BedsPage() {
                 variant="outline"
                 size="sm"
                 disabled={selectedBed?.status !== "limpieza" || statusUpdating}
-                onClick={handleCleanSelected}
+                onClick={openCleanConfirm}
               >
                 Marcar como limpia
               </Button>
@@ -146,6 +166,29 @@ export function BedsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmModal
+        open={isCleanConfirmOpen}
+        title="Confirmar limpieza"
+        message={
+          <div className="space-y-2">
+            <p>{`¿Marcar la cama ${selectedBed?.id ?? ""} como limpia?`}</p>
+            {selectedBed && (
+              <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground space-y-1">
+                <p>
+                  <span className="font-medium text-foreground">Estado actual:</span> {statusLabels[selectedBed.status]}
+                </p>
+              </div>
+            )}
+          </div>
+        }
+        cancelText="Cancelar"
+        confirmText="Confirmar"
+        loading={statusUpdating}
+        error={cleanModalError}
+        onClose={() => (!statusUpdating ? setIsCleanConfirmOpen(false) : null)}
+        onConfirm={confirmClean}
+      />
     </div>
   );
 }

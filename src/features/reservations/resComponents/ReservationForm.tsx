@@ -44,8 +44,11 @@ interface ReservationFormProps {
   updateGuest: (index: number, field: keyof GuestData, value: any) => void
   availableBeds: number[]
   getAvailableBedsForGuest: (guestIndex: number) => number[]
-  loading: boolean
   loadingBeds: boolean
+  isSaving: boolean
+  fieldErrors: Record<string, string>
+  formError: string
+  clearFieldError: (field: string) => void
 }
 
 
@@ -69,8 +72,11 @@ export function ReservationForm({
   updateGuest,
   availableBeds,
   getAvailableBedsForGuest,
-  loading,
   loadingBeds,
+  isSaving,
+  fieldErrors,
+  formError,
+  clearFieldError,
 }: ReservationFormProps) {
   const today = new Date()
   const timezoneOffsetMs = today.getTimezoneOffset() * 60 * 1000
@@ -86,6 +92,25 @@ export function ReservationForm({
     return timesOk && bedsOk && guestsOk
   }
   const assignedBedsCount = guests.filter(g => g.bedNumber !== null).length
+  const guestFieldKey = (index: number, field: string) => `guest.${index}.${field}`
+  const getFieldError = (...keys: string[]) => {
+    for (const key of keys) {
+      const message = fieldErrors[key]
+      if (message) return message
+    }
+    return ""
+  }
+  const hasFieldError = (...keys: string[]) => Boolean(getFieldError(...keys))
+  const withErrorClass = (base: string, ...keys: string[]) =>
+    hasFieldError(...keys) ? (base ? `${base} input-error` : "input-error") : base
+  const renderFieldError = (...keys: string[]) => {
+    const message = getFieldError(...keys)
+    if (!message) return null
+    return <p className="field-error">{message}</p>
+  }
+  const clearErrorFor = (...keys: string[]) => {
+    keys.forEach((key) => clearFieldError(key))
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -99,6 +124,11 @@ export function ReservationForm({
       
     
         <div className="space-y-6 p-6">
+          {formError && (
+            <div className="form-error" role="alert">
+              {formError}
+            </div>
+          )}
           {/* Fechas */}
           <Card className="border-blue-200 bg-blue-50/50">
             <CardContent className="pt-6 space-y-4">
@@ -106,44 +136,62 @@ export function ReservationForm({
                 <div>
                   <Label className="text-blue-900">Check-in *</Label>
                   <Input
+                    name="check_in"
                     type="date"
                     value={checkInDate}
-                    onChange={(e) => setCheckInDate(e.target.value)}
+                    onChange={(e) => {
+                      clearErrorFor("check_in")
+                      setCheckInDate(e.target.value)
+                    }}
                     min={todayDateStr}
                     required
-                    className="bg-white"
+                    className={withErrorClass("bg-white", "check_in")}
                   />
                   <div className="mt-2">
                     <Input
+                      name="check_in_time"
                       type="time"
                       value={checkInTime}
-                      onChange={(e) => setCheckInTime(e.target.value)}
+                      onChange={(e) => {
+                        clearErrorFor("check_in")
+                        setCheckInTime(e.target.value)
+                      }}
                       min={checkInDate === todayDateStr ? nowTimeStr : undefined}
                       required
-                      className="bg-white"
+                      className={withErrorClass("bg-white", "check_in")}
                     />
                   </div>
+                  {renderFieldError("check_in")}
                 </div>
                 <div>
                   <Label className="text-blue-900">Check-out *</Label>
                   <Input
+                    name="check_out"
                     type="date"
                     value={checkOutDate}
-                    onChange={(e) => setCheckOutDate(e.target.value)}
+                    onChange={(e) => {
+                      clearErrorFor("check_out")
+                      setCheckOutDate(e.target.value)
+                    }}
                     min={checkInDate}
                     required
-                    className="bg-white"
+                    className={withErrorClass("bg-white", "check_out")}
                   />
                   <div className="mt-2">
                     <Input
+                      name="check_out_time"
                       type="time"
                       value={checkOutTime}
-                      onChange={(e) => setCheckOutTime(e.target.value)}
+                      onChange={(e) => {
+                        clearErrorFor("check_out")
+                        setCheckOutTime(e.target.value)
+                      }}
                       min={checkOutDate === checkInDate ? checkInTime : undefined}
                       required
-                      className="bg-white"
+                      className={withErrorClass("bg-white", "check_out")}
                     />
                   </div>
+                  {renderFieldError("check_out")}
                 </div>
               </div>
 
@@ -196,7 +244,12 @@ export function ReservationForm({
                 <div className="absolute inset-0 cursor-not-allowed" />
               </div>
             ) : (
-              <Select value={guestCount.toString()} onValueChange={handleGuestCountChange}>
+              <Select
+                value={guestCount.toString()}
+                onValueChange={(value) => {
+                  handleGuestCountChange(value)
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -263,10 +316,13 @@ export function ReservationForm({
                   <Label>Cama asignada *</Label>
                   <Select
                     value={guest.bedNumber?.toString() || ""}
-                    onValueChange={(value) => updateGuest(index, "bedNumber", parseInt(value))}
+                    onValueChange={(value) => {
+                      clearErrorFor(guestFieldKey(index, "bed"), "camas")
+                      updateGuest(index, "bedNumber", parseInt(value))
+                    }}
                     disabled={availableBeds.length === 0}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={withErrorClass("", guestFieldKey(index, "bed"), "camas")}>
                       <SelectValue placeholder="Selecciona una cama" />
                     </SelectTrigger>
                     <SelectContent>
@@ -280,26 +336,39 @@ export function ReservationForm({
                       ))}
                     </SelectContent>
                   </Select>
+                  {renderFieldError(guestFieldKey(index, "bed"), "camas")}
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Nombre</Label>
                     <Input
+                      name="nombre"
                       value={guest.name}
-                      onChange={(e) => updateGuest(index, "name", e.target.value)}
+                      onChange={(e) => {
+                        clearErrorFor(guestFieldKey(index, "name"), "nombre")
+                        updateGuest(index, "name", e.target.value)
+                      }}
                       placeholder="Juan"
                       required
+                      className={withErrorClass("", guestFieldKey(index, "name"), "nombre")}
                     />
+                    {renderFieldError(guestFieldKey(index, "name"), "nombre")}
                   </div>
                   <div>
                     <Label>Apellido</Label>
                     <Input
+                      name="apellido"
                       value={guest.lastName}
-                      onChange={(e) => updateGuest(index, "lastName", e.target.value)}
+                      onChange={(e) => {
+                        clearErrorFor(guestFieldKey(index, "lastName"), "apellido")
+                        updateGuest(index, "lastName", e.target.value)
+                      }}
                       placeholder="Perez"
                       required
+                      className={withErrorClass("", guestFieldKey(index, "lastName"), "apellido")}
                     />
+                    {renderFieldError(guestFieldKey(index, "lastName"), "apellido")}
                   </div>
                 </div>
 
@@ -307,36 +376,54 @@ export function ReservationForm({
                   <div>
                     <Label>DNI</Label>
                     <Input
+                      name="dni"
                       value={guest.dni}
-                      onChange={(e) => updateGuest(index, "dni", e.target.value)}
+                      onChange={(e) => {
+                        clearErrorFor(guestFieldKey(index, "dni"), "dni", "documento")
+                        updateGuest(index, "dni", e.target.value)
+                      }}
                       inputMode="numeric"
                       pattern="\\d{6,}"
                       title="Solo numeros (6+ digitos)"
                       placeholder="12345678"
                       required
+                      className={withErrorClass("", guestFieldKey(index, "dni"), "dni", "documento")}
                     />
+                    {renderFieldError(guestFieldKey(index, "dni"), "dni", "documento")}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Telefono</Label>
                     <Input
+                      name="telefono"
                       value={guest.telefono}
-                      onChange={(e) => updateGuest(index, "telefono", e.target.value)}
+                      onChange={(e) => {
+                        clearErrorFor(guestFieldKey(index, "telefono"), "telefono")
+                        updateGuest(index, "telefono", e.target.value)
+                      }}
                       inputMode="tel"
                       pattern="\\d{7,}"
                       title="Minimo 7 digitos"
                       placeholder=""
                       required
+                      className={withErrorClass("", guestFieldKey(index, "telefono"), "telefono")}
                     />
+                    {renderFieldError(guestFieldKey(index, "telefono"), "telefono")}
                   </div>
                   <div>
                     <Label>Email</Label>
                     <Input
+                      name="email"
                       type="email"
                       value={guest.email}
-                      onChange={(e) => updateGuest(index, "email", e.target.value)}
+                      onChange={(e) => {
+                        clearErrorFor(guestFieldKey(index, "email"), "email")
+                        updateGuest(index, "email", e.target.value)
+                      }}
                       placeholder="email@ejemplo.com"
+                      className={withErrorClass("", guestFieldKey(index, "email"), "email")}
                     />
+                    {renderFieldError(guestFieldKey(index, "email"), "email")}
                   </div>
                 </div>
                 </div>
@@ -345,40 +432,64 @@ export function ReservationForm({
                 <div>
                   <Label>Direccion</Label>
                   <Input
+                    name="direccion"
                     value={(guest as any).direccion || ""}
-                    onChange={(e) => updateGuest(index, "direccion", e.target.value)}
+                    onChange={(e) => {
+                      clearErrorFor(guestFieldKey(index, "direccion"), "direccion")
+                      updateGuest(index, "direccion", e.target.value)
+                    }}
                     placeholder="Calle 123, Ciudad"
                     required
+                    className={withErrorClass("", guestFieldKey(index, "direccion"), "direccion")}
                   />
+                  {renderFieldError(guestFieldKey(index, "direccion"), "direccion")}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Origen</Label>
                     <Input
+                      name="origen"
                       value={guest.origin}
-                      onChange={(e) => updateGuest(index, "origin", e.target.value)}
+                      onChange={(e) => {
+                        clearErrorFor("origen", "origin")
+                        updateGuest(index, "origin", e.target.value)
+                      }}
                       placeholder="Argentina"
+                      className={withErrorClass("", "origen", "origin")}
                     />
+                    {renderFieldError("origen", "origin")}
                   </div>
                   <div>
                     <Label>Patente</Label>
                     <Input
+                      name="patente"
                       value={guest.license}
-                      onChange={(e) => updateGuest(index, "license", e.target.value)}
+                      onChange={(e) => {
+                        clearErrorFor(guestFieldKey(index, "license"), "patente")
+                        updateGuest(index, "license", e.target.value)
+                      }}
                       placeholder="ABC123"
+                      className={withErrorClass("", guestFieldKey(index, "license"), "patente")}
                     />
+                    {renderFieldError(guestFieldKey(index, "license"), "patente")}
                   </div>
                 </div>
 
                 <div>
                   <Label>Notas</Label>
                   <Textarea
+                    name="notas"
                     value={guest.notes}
-                    onChange={(e) => updateGuest(index, "notes", e.target.value)}
-                    placeholder="Información adicional..."
+                    onChange={(e) => {
+                      clearErrorFor("notas", "notes")
+                      updateGuest(index, "notes", e.target.value)
+                    }}
+                    placeholder="Informacion adicional..."
                     rows={3}
+                    className={withErrorClass("", "notas", "notes")}
                   />
+                  {renderFieldError("notas", "notes")}
                 </div>
               </CardContent>
             </Card>
@@ -388,13 +499,13 @@ export function ReservationForm({
             <Button 
             variant="outline" 
             onClick={() => onOpenChange(false)} 
-            disabled={loading}>
+            disabled={isSaving}>
               Cancelar
             </Button>
             <Button 
             onClick={onSaveReservation} 
-            disabled={!isFormValid() || loading}>
-              {loading ? (
+            disabled={!isFormValid() || isSaving}>
+              {isSaving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Guardando...

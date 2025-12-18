@@ -6,9 +6,9 @@ interface ReservationsListProps {
   formatDate: (date: Date) => string
   onEdit: (reservation: reservation) => void
   onDelete: (id: number) => void
-  onCheckIn: (id: number) => void
-  onCheckOut: (id: number) => void
-  onExtend: (id: number) => void
+  onCheckIn: (id: number) => Promise<void>
+  onCheckOut: (id: number) => Promise<void>
+  onExtend: (reservation: reservation) => void
 }
 
 export function ReservationsList({ reservations, formatDate, onEdit, onDelete, onCheckIn, onCheckOut, onExtend }: ReservationsListProps) {

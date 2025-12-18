@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Label } from "@/components/ui/Label"
-import { Badge } from "@/components/ui/Badge"
 import { fetchReservationsRaw, type ReservaApi } from "../reservations/services/reservationService"
 
 const GuestsPage = () => {
@@ -67,14 +66,6 @@ const GuestsPage = () => {
 
   const formatDateTime = (d: string) => {
     try { return new Date(d).toLocaleString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) } catch { return d }
-  }
-
-  const mapEstado = (r: ReservaApi): { text: string; variant: "default"|"secondary"|"outline" } => {
-    if (r.checked_out_at) return { text: 'completada', variant: 'secondary' }
-    if (r.checked_in_at) return { text: 'en_progreso', variant: 'default' }
-    const e = (r.estado || r.status || '').toUpperCase()
-    if (e === 'CANCELADA' || e === 'NO_SHOW') return { text: 'cancelada', variant: 'outline' }
-    return { text: 'activa', variant: 'default' }
   }
 
   return (
@@ -172,7 +163,6 @@ const GuestsPage = () => {
                         .sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime())
                         .slice(0, 2)
                         .map((r) => {
-                          const est = mapEstado(r)
                           const camas = (r.camas_detalle || []).map((c) => c.cama_numero).filter((n): n is number => typeof n === 'number')
                           return (
                             <div key={`top-${guest.id}-${r.id}`} className="flex items-center justify-between rounded bg-white/70 border px-3 py-2">
@@ -180,7 +170,7 @@ const GuestsPage = () => {
                                 <div className="text-xs text-muted-foreground">#{r.id} · Camas {camas.join(', ') || '-'} </div>
                                 <div className="text-sm">{formatDateTime(r.check_in)} → {formatDateTime(r.check_out)}</div>
                               </div>
-                              <Badge variant={est.variant}>{est.text}</Badge>
+                              
                             </div>
                           )
                         })}
@@ -200,7 +190,6 @@ const GuestsPage = () => {
                         .sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime())
                         .slice(2)
                         .map((r) => {
-                          const est = mapEstado(r)
                           const camas = (r.camas_detalle || []).map((c) => c.cama_numero).filter((n): n is number => typeof n === 'number')
                           return (
                             <div key={`rest-${guest.id}-${r.id}`} className="flex items-center justify-between px-4 py-2 border-b last:border-0 bg-white/40">
@@ -208,7 +197,7 @@ const GuestsPage = () => {
                                 <div className="text-xs text-muted-foreground">#{r.id} · Camas {camas.join(', ') || '-'}</div>
                                 <div className="text-xs">{formatDateTime(r.check_in)} → {formatDateTime(r.check_out)}</div>
                               </div>
-                              <Badge variant={est.variant}>{est.text}</Badge>
+                             
                             </div>
                           )
                         })}

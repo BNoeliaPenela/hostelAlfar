@@ -1,15 +1,20 @@
 // src/pages/ReservationPage.tsx
 
-import { useReservations } from "../reservations/hooks/useReservation"
-import { ReservationCard } from "../reservations/resComponents/ReservationCard"
-import { ReservationForm } from "../reservations/resComponents/ReservationForm"
-import { Plus, Calendar, Loader2, AlertTriangle, Clock, UserCheck, Ban } from "lucide-react"
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { AlertTriangle, Plus } from "lucide-react"
 import { Button } from "../../components/ui/Button"
+import type { reservation } from "../reservations/types/reservations"
+import { useReservations } from "../reservations/hooks/useReservation"
+import { fetchReservations } from "../reservations/services/reservationService"
+import { ReservationForm } from "../reservations/resComponents/ReservationForm"
+import { ExtendStayModal } from "../reservations/resComponents/ExtendStayModal"
+import { ReservationsActiveView } from "../reservations/resComponents/ReservationsActiveView"
+import { ReservationsHistoryView } from "../reservations/resComponents/ReservationsHistoryView"
 
 export default function ReservationPage() {
   const {
     reservations,
+    listError,
     isNewReservationOpen,
     setIsNewReservationOpen,
     isEditMode,
@@ -33,6 +38,7 @@ export default function ReservationPage() {
     resetForm,
     loading,
     loadingBeds,
+    isSaving,
     handleCheckIn,
     handleCheckOut,
     pendingCheckins,
@@ -41,47 +47,151 @@ export default function ReservationPage() {
     bulkCheckIn,
     markNoShow,
     snoozeReservation,
-    handleExtendReservation,
+    extendReservationStay,
+    checkInWarning,
+    dismissCheckInWarning,
+    fieldErrors,
+    formError,
+    clearFieldError,
   } = useReservations()
 
-  const formatDate = (date: Date) => date.toLocaleDateString("es-ES", {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'})
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+
+  const [tab, setTab] = useState<"activas" | "historial">("activas")
+  const [historyReservations, setHistoryReservations] = useState<reservation[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+
+  const [futureReservations, setFutureReservations] = useState<reservation[]>([])
+  const [futureLoading, setFutureLoading] = useState(false)
+  const [futureError, setFutureError] = useState<string | null>(null)
+  const [futureLoaded, setFutureLoaded] = useState(false)
+
+  const loadHistoryReservations = async () => {
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      const data = await fetchReservations()
+      setHistoryReservations(data)
+      setHistoryLoaded(true)
+    } catch (error) {
+      const anyErr: any = error as any
+      const msg = anyErr?.response?.data?.detail || anyErr?.message || "No se pudo cargar el historial."
+      setHistoryError(msg)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const loadFutureReservations = useCallback(async () => {
+    setFutureLoading(true)
+    setFutureError(null)
+    try {
+      const data = await fetchReservations()
+      const nowTs = Date.now()
+      const maxCache = 300
+      const future = data
+        .filter((r) => r.status === "activa" && !r.realCheckInDateTime && r.checkIn instanceof Date && !Number.isNaN(r.checkIn.getTime()))
+        .filter((r) => r.checkIn.getTime() > nowTs)
+        .sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime())
+        .slice(0, maxCache)
+      setFutureReservations(future)
+      setFutureLoaded(true)
+    } catch (error) {
+      const anyErr: any = error as any
+      const msg = anyErr?.response?.data?.detail || anyErr?.message || "No se pudieron cargar las reservas próximas."
+      setFutureError(msg)
+    } finally {
+      setFutureLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (tab !== "historial") return
+    if (historyLoaded || historyLoading) return
+    loadHistoryReservations()
+  }, [tab, historyLoaded, historyLoading])
+
+  useEffect(() => {
+    if (tab !== "activas") return
+    if (futureLoaded || futureLoading) return
+    loadFutureReservations()
+  }, [tab, futureLoaded, futureLoading, loadFutureReservations])
+
+  useEffect(() => {
+    const handler = () => loadFutureReservations()
+    window.addEventListener("reservations:futureReload", handler as EventListener)
+    return () => window.removeEventListener("reservations:futureReload", handler as EventListener)
+  }, [loadFutureReservations])
 
   const handleNewReservation = () => {
-  resetForm()
-  setIsNewReservationOpen(true)
+    resetForm()
+    setIsNewReservationOpen(true)
   }
-  const activeReservations = reservations
-  .filter(r => r.status === "activa" || r.status === "en_progreso")
-  .sort((a, b) => {
-    // Prioriza las reservas en progreso arriba
-    if (a.status === "en_progreso" && b.status !== "en_progreso") return -1
-    if (a.status !== "en_progreso" && b.status === "en_progreso") return 1
-    // Si ambas tienen el mismo estado, ordená por fecha de check-in más próxima
-    return a.checkIn.getTime() - b.checkIn.getTime()
-  })
-  
-  const completedReservations = reservations.filter(r => r.status === "completada")
-  const [showPendingPanel, setShowPendingPanel] = useState(false)
-  const [selectedPendingIds, setSelectedPendingIds] = useState<number[]>([])
-  const toggleSelectPending = (id: number) => {
-    setSelectedPendingIds((prev: number[]) => prev.includes(id) ? prev.filter((x: number) => x !== id) : [...prev, id])
+
+  const [isExtendModalOpen, setIsExtendModalOpen] = useState(false)
+  const [extendTarget, setExtendTarget] = useState<reservation | null>(null)
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
+
+  const openExtendModal = (reservation: reservation) => {
+    setExtendTarget(reservation)
+    setIsExtendModalOpen(true)
   }
-  const allPendingIds = pendingCheckins.map(r => r.id)
-  const toggleSelectAllPending = () => {
-    setSelectedPendingIds((prev: number[]) => prev.length === allPendingIds.length ? [] : allPendingIds)
+  const closeExtendModal = () => {
+    setIsExtendModalOpen(false)
+    setExtendTarget(null)
   }
- return (
+
+  const handleExtendStay = async (reservationId: number, newCheckOut: Date) => {
+    const result = await extendReservationStay(reservationId, newCheckOut)
+    if (result.ok) setFeedback({ type: "success", message: "Estadía extendida correctamente." })
+    return result
+  }
+
+  useEffect(() => {
+    if (!feedback) return
+    const timer = setTimeout(() => setFeedback(null), 5000)
+    return () => clearTimeout(timer)
+  }, [feedback])
+
+  return (
     <div className="space-y-6 p-6">
-      {/* Header */}
+      {checkInWarning && (
+        <div className="fixed right-6 top-24 z-50 w-full max-w-sm rounded-lg border border-amber-200 bg-amber-50 shadow-lg">
+          <div className="flex items-start gap-3 p-4 text-amber-900">
+            <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+            <div className="flex-1 text-sm">
+              <p className="font-semibold">Check-in adelantado</p>
+              <p className="text-xs leading-relaxed text-amber-800">
+                {`Registraste el check-in ${checkInWarning.minutesEarly} min antes de lo programado (${checkInWarning.scheduledAt.toLocaleString(
+                  "es-AR",
+                  { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" },
+                )}).`}
+              </p>
+            </div>
+            <Button
+              aria-label="Cerrar aviso de check-in adelantado"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-amber-900"
+              onClick={dismissCheckInWarning}
+            >
+              X
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Reservas</h2>
-          <p className="text-gray-600 mt-1">
-            Gestión de reservas del hostel cápsula
-          </p>
+          <p className="text-gray-600 mt-1">Gestión de reservas del hostel cápsula</p>
         </div>
         <Button onClick={handleNewReservation} size="lg">
           <Plus className="h-5 w-5 mr-2" />
@@ -89,127 +199,62 @@ export default function ReservationPage() {
         </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-blue-600 font-medium">Reservas Activas</p>
-              <p className="text-2xl font-bold text-blue-900">{activeReservations.length}</p>
-            </div>
-            <Calendar className="h-8 w-8 text-blue-400" />
-          </div>
-        </div>
-        
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-600 font-medium">Completadas</p>
-              <p className="text-2xl font-bold text-green-900">{completedReservations.length}</p>
-            </div>
-            <Calendar className="h-8 w-8 text-green-400" />
-          </div>
-        </div>
-        
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-purple-600 font-medium">Total Reservas</p>
-              <p className="text-2xl font-bold text-purple-900">{reservations.length}</p>
-            </div>
-            <Calendar className="h-8 w-8 text-purple-400" />
-          </div>
-        </div>
+      <div className="flex items-center gap-2">
+        <Button variant={tab === "activas" ? "default" : "outline"} onClick={() => setTab("activas")}>
+          Activas
+        </Button>
+        <Button variant={tab === "historial" ? "default" : "outline"} onClick={() => setTab("historial")}>
+          Historial
+        </Button>
       </div>
 
-      {/* Banner de pendientes de check-in */}
-      {(pendingCheckins.length > 0) && (
-        <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-3">
-          <div className="flex items-center gap-2 text-amber-800">
-            <AlertTriangle className="h-5 w-5" />
-            <span>
-              {overdueCheckins.length > 0 ? `${overdueCheckins.length} vencid${overdueCheckins.length===1?'o':'os'}` : ''}
-              {overdueCheckins.length > 0 && (pendingCheckins.length - overdueCheckins.length) > 0 ? ', ' : ''}
-              {(pendingCheckins.length - overdueCheckins.length) > 0 ? `${pendingCheckins.length - overdueCheckins.length} próximos` : ''}
-              {` check-ins pendientes`}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowPendingPanel(true)}>
-              Ver pendientes
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          <span className="ml-2 text-gray-600">Cargando reservas...</span>
-        </div>
-      )}
-
-      {/* Active Reservations */}
-      {!loading && activeReservations.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xl font-semibold text-gray-900">Reservas Activas</h3>
-          <div className="grid gap-4">
-              {activeReservations.map((reservation) => (
-                <ReservationCard 
-                  key={reservation.id} 
-                  reservation={reservation} 
-                  formatDate={formatDate}
-                  onEdit={openEditReservation}
-                  onDelete={removeReservation}
-                  onCheckIn={handleCheckIn}
-                  onCheckOut={handleCheckOut}
-                  onExtend={handleExtendReservation}
-                />
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Completed Reservations */}
-      {!loading && completedReservations.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xl font-semibold text-gray-900">Reservas Completadas</h3>
-          <div className="grid gap-4">
-              {completedReservations.map((reservation) => (
-                <ReservationCard 
-                  key={reservation.id} 
-                  reservation={reservation} 
-                  formatDate={formatDate}
-                  onEdit={openEditReservation}
-                  onDelete={removeReservation}
-                  onCheckIn={handleCheckIn}
-                  onCheckOut={handleCheckOut}
-                  onExtend={handleExtendReservation}
-                />
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!loading && reservations.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed">
-          <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            No hay reservas
-          </h3>
-          <p className="text-gray-600 mb-4">
-            Comienza creando tu primera reserva
-          </p>
-          <Button onClick={handleNewReservation}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nueva Reserva
+      {feedback && (
+        <div
+          className={`flex items-start justify-between rounded-lg border p-4 ${
+            feedback.type === "success"
+              ? "bg-green-50 border-green-200 text-green-800"
+              : "bg-red-50 border-red-200 text-red-800"
+          }`}
+        >
+          <p className="text-sm">{feedback.message}</p>
+          <Button variant="ghost" size="sm" onClick={() => setFeedback(null)}>
+            Cerrar
           </Button>
         </div>
       )}
 
-      {/* Reservation Form Modal */}
+      {tab === "activas" ? (
+        <ReservationsActiveView
+          reservations={reservations}
+          loading={loading}
+          error={listError}
+          futureReservations={futureReservations}
+          futureLoading={futureLoading}
+          futureError={futureError}
+          onReloadFuture={loadFutureReservations}
+          formatDate={formatDate}
+          pendingCheckins={pendingCheckins}
+          overdueCheckins={overdueCheckins}
+          onEdit={openEditReservation}
+          onDelete={removeReservation}
+          onCheckIn={handleCheckIn}
+          onCheckOut={handleCheckOut}
+          onExtend={openExtendModal}
+          bulkCheckIn={bulkCheckIn}
+          quickCheckIn={quickCheckIn}
+          markNoShow={markNoShow}
+          snoozeReservation={snoozeReservation}
+        />
+      ) : (
+        <ReservationsHistoryView
+          reservations={historyReservations}
+          loading={historyLoading}
+          error={historyError}
+          formatDate={formatDate}
+          onRefresh={historyLoaded ? loadHistoryReservations : undefined}
+        />
+      )}
+
       <ReservationForm
         isOpen={isNewReservationOpen}
         onOpenChange={setIsNewReservationOpen}
@@ -229,63 +274,14 @@ export default function ReservationPage() {
         updateGuest={updateGuest}
         availableBeds={availableBeds}
         getAvailableBedsForGuest={getAvailableBedsForGuest}
-        loading={loading}
         loadingBeds={loadingBeds}
+        isSaving={isSaving}
+        fieldErrors={fieldErrors}
+        formError={formError}
+        clearFieldError={clearFieldError}
       />
 
-      {/* Panel de pendientes de check-in */}
-      {showPendingPanel && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Clock className="h-5 w-5" /> Pendientes de Check-in
-              </h3>
-              <Button variant="outline" size="sm" onClick={() => setShowPendingPanel(false)}>Cerrar</Button>
-            </div>
-            <div className="flex items-center justify-between mb-2 text-sm text-gray-600">
-              <div>
-                Vencidos: {overdueCheckins.length} · Próximos (≤15 min): {pendingCheckins.length - overdueCheckins.length}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={toggleSelectAllPending}>
-                  {selectedPendingIds.length === allPendingIds.length ? 'Deseleccionar' : 'Seleccionar todos'}
-                </Button>
-                <Button size="sm" disabled={selectedPendingIds.length === 0} onClick={async () => { await bulkCheckIn(selectedPendingIds); setSelectedPendingIds([]); setShowPendingPanel(false) }}>
-                  <UserCheck className="h-4 w-4 mr-1" /> Check-in ({selectedPendingIds.length})
-                </Button>
-              </div>
-            </div>
-            <div className="max-h-96 overflow-y-auto divide-y border rounded">
-              {pendingCheckins.map(r => (
-                <div key={r.id} className="p-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <input type="checkbox" checked={selectedPendingIds.includes(r.id)} onChange={() => toggleSelectPending(r.id)} />
-                    <div>
-                      <div className="font-medium">Reserva #{r.id}</div>
-                      <div className="text-xs text-gray-600">Check-in: {r.checkIn.toLocaleString('es-AR')}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => snoozeReservation(r.id, 10)}>Posponer 10 min</Button>
-                    <Button variant="outline" size="sm" onClick={() => markNoShow(r.id)} title="Marcar como no show">
-                      <Ban className="h-4 w-4" />
-                    </Button>
-                    <Button size="sm" onClick={async () => { await quickCheckIn(r.id); setSelectedPendingIds((prev: number[]) => prev.filter((x: number) => x!==r.id)) }}>
-                      Check-in
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {pendingCheckins.length === 0 && (
-                <div className="p-4 text-sm text-gray-500">No hay pendientes</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <ExtendStayModal open={isExtendModalOpen} onClose={closeExtendModal} reservation={extendTarget} onSuccess={handleExtendStay} />
     </div>
   )
 }
-
-  

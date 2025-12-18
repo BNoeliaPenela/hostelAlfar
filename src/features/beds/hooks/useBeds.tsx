@@ -72,20 +72,25 @@ export const useBeds = () => {
     [selectedBed, loadBeds],
   );
 
-  const handleCleanSelected = useCallback(async () => {
-    if (!selectedBed) return;
-    if (!window.confirm("¿Marcar esta cama como limpia?")) return;
+  const handleCleanSelected = useCallback(async (): Promise<{ ok: boolean; message?: string }> => {
+    if (!selectedBed) return { ok: false, message: "No hay cama seleccionada." };
     setStatusUpdating(true);
     setError(null);
     try {
       const cleaned = await cleanBed(selectedBed.backendId);
       if (cleaned.status !== "libre" && cleaned.status !== "proceso") {
-        setError("La cama no quedó LIBRE tras limpiar, puede existir una reserva en curso. Verifica el check-out.");
+        const message = "La cama no quedó LIBRE tras limpiar. Puede existir una reserva en curso. Verifica el check-out.";
+        setError(message);
+        await loadBeds();
+        return { ok: false, message };
       }
       await loadBeds();
+      return { ok: true };
     } catch (err) {
       console.error("Error limpiando cama:", err);
-      setError("No pudimos limpiar la cama. Intenta nuevamente.");
+      const message = "No pudimos limpiar la cama. Intenta nuevamente.";
+      setError(message);
+      return { ok: false, message };
     } finally {
       setStatusUpdating(false);
     }

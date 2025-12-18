@@ -1,1 +1,20 @@
-@import "tailwindcss"
+@import "tailwindcss";
+
+.field-error {
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.input-error {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2);
+}
+
+.form-error {
+  background: #ffe6e6;
+  color: #7a0b0b;
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+}

@@ -2,6 +2,8 @@
 import type { reservation, GuestData } from "../types/reservations"
 import { 
   fetchReservations, 
+  fetchActiveReservations,
+  fetchReservationById,
   createReservation, 
   updateReservation, 
   deleteReservation,
@@ -9,12 +11,19 @@ import {
   checkInReservation,
   checkOutReservation,
   noShowReservation,
-  checkExtensionAvailability,
-  extendReservation,
+  extendStayRequest,
 } from "../services/reservationService"
+
+
+type CheckInWarning = {
+  reservationId: number
+  minutesEarly: number
+  scheduledAt: Date
+}
 
 export function useReservations() {
   const [reservations, setReservations] = useState<reservation[]>([])
+  const [listError, setListError] = useState<string | null>(null)
   const [isNewReservationOpen, setIsNewReservationOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [editingReservationId, setEditingReservationId] = useState<number | null>(null)
@@ -44,6 +53,9 @@ export function useReservations() {
   const [isSaving, setIsSaving] = useState(false)
   const [editingReservation, setEditingReservation] = useState<reservation | null>(null)  // Guarda la reserva original
   const [snoozedUntil, setSnoozedUntil] = useState<Map<number, number>>(new Map())
+  const [checkInWarning, setCheckInWarning] = useState<CheckInWarning | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [formError, setFormError] = useState("")
   /*const [selectedBed, setSelectedBed] = useState<number>(0);
   const selectBed = (bedNum: number) => setSelectedBed(bedNum);
   // Nuevo método para agregar una reserva
@@ -54,6 +66,19 @@ export function useReservations() {
   useEffect(() => {
     loadReservations()
   }, [])
+
+  useEffect(() => {
+    if (!checkInWarning) return
+    const timer = window.setTimeout(() => setCheckInWarning(null), 6000)
+    return () => window.clearTimeout(timer)
+  }, [checkInWarning])
+
+  useEffect(() => {
+    if (!isNewReservationOpen) {
+      setFieldErrors({})
+      setFormError("")
+    }
+  }, [isNewReservationOpen])
 
   // Recalcula listas cada 60s (sin abrir popups)
   useEffect(() => {
@@ -69,30 +94,160 @@ export function useReservations() {
     }
   }, [checkInDate, checkOutDate, checkInTime, checkOutTime])
 
-  const loadReservations = async () => {
-    setLoading(true)
+  const loadReservations = async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true)
+    setListError(null)
     try {
-      const data = await fetchReservations()
+      const data = await fetchActiveReservations()
       setReservations(data)
     } catch (error) {
       console.error("Error cargando reservas:", error)
+      const anyErr: any = error as any
+      const msg = anyErr?.response?.data?.detail || anyErr?.message || "No se pudieron cargar las reservas activas."
+      setListError(msg)
     } finally {
-      setLoading(false)
+      if (!options?.silent) setLoading(false)
     }
+  }
+
+  const dismissCheckInWarning = () => setCheckInWarning(null)
+
+  const clearFieldError = (field: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  const normalizeBackendErrors = (data: any) => {
+    const errors: Record<string, string> = {}
+    let general = ""
+    if (data && typeof data === "object") {
+      Object.entries(data).forEach(([key, value]) => {
+        const text = Array.isArray(value)
+          ? value.filter(Boolean).join(" / ")
+          : typeof value === "string"
+          ? value
+          : ""
+        if (!text) return
+        if (key === "detail" || key === "non_field_errors") {
+          general = general ? `${general} / ${text}` : text
+        } else {
+          errors[key] = text
+        }
+      })
+    }
+    return { errors, general }
+  }
+
+  const handleFormSubmitError = (error: any, fallbackMessage: string) => {
+    const status = error?.response?.status
+    const data = error?.response?.data
+    if (status === 400 && data) {
+      const { errors, general } = normalizeBackendErrors(data)
+      setFieldErrors(errors)
+      if (general) {
+        setFormError(general)
+      } else if (Object.keys(errors).length > 0) {
+        setFormError("Revisa los campos marcados.")
+      } else {
+        setFormError(fallbackMessage)
+      }
+      return
+    }
+    const message = error?.message || fallbackMessage
+    setFormError(message)
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const patenteRegex = /^(?:[A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$/i
+  const digitsCount = (value: string, min: number) => (value || "").replace(/\D/g, "").length >= min
+  const guestFieldKey = (index: number, field: string) => `guest.${index}.${field}`
+
+  const validateReservationInput = () => {
+    const nextErrors: Record<string, string> = {}
+    const generalMessages: string[] = []
+    const addError = (key: string, message: string) => {
+      if (!key || nextErrors[key]) return
+      nextErrors[key] = message
+    }
+    const addGeneralMessage = (message: string) => {
+      if (!generalMessages.includes(message)) generalMessages.push(message)
+    }
+
+    if (!checkInDate || !checkOutDate || !checkInTime || !checkOutTime) {
+      addError("check_in", "Por favor selecciona fecha y hora de check-in y check-out")
+      addError("check_out", "Por favor selecciona fecha y hora de check-in y check-out")
+      addGeneralMessage("Completa las fechas para continuar.")
+    } else {
+      const tentativeCheckIn = new Date(`${checkInDate}T${checkInTime}:00`)
+      const tentativeCheckOut = new Date(`${checkOutDate}T${checkOutTime}:00`)
+      if (Number.isNaN(tentativeCheckIn.getTime()) || Number.isNaN(tentativeCheckOut.getTime())) {
+        addError("check_out", "Fechas inválidas")
+        addGeneralMessage("Las fechas ingresadas no son válidas.")
+      } else if (tentativeCheckOut.getTime() <= tentativeCheckIn.getTime()) {
+        addError("check_out", "El check-out debe ser posterior al check-in")
+        addGeneralMessage("El check-out debe ser posterior al check-in.")
+      }
+    }
+
+    guests.forEach((guest, index) => {
+      if (guest.bedNumber === null) {
+        addError(guestFieldKey(index, "bed"), "Selecciona una cama")
+        addError("camas", "Por favor asigna una cama a cada huésped")
+      }
+      if (!guest.name.trim()) {
+        addError(guestFieldKey(index, "name"), "Nombre requerido")
+      }
+      if (!guest.lastName.trim()) {
+        addError(guestFieldKey(index, "lastName"), "Apellido requerido")
+      }
+      if (!digitsCount(guest.dni, 6)) {
+        addError(guestFieldKey(index, "dni"), "DNI inválido (mín. 6 dígitos)")
+      }
+      if (!digitsCount(guest.telefono, 7)) {
+        addError(guestFieldKey(index, "telefono"), "Teléfono inválido (mín. 7 dígitos)")
+      }
+      if (!(guest as any).direccion?.trim()) {
+        addError(guestFieldKey(index, "direccion"), "Dirección requerida")
+      }
+      const email = guest.email?.trim()
+      if (email && !emailRegex.test(email)) {
+        addError(guestFieldKey(index, "email"), "Email inválido")
+      }
+      const patente = guest.license?.trim()
+      if (patente && !patenteRegex.test(patente.replace(/-/g, ""))) {
+        addError(guestFieldKey(index, "license"), "Formato de patente inválido (ABC123 o AB123CD)")
+      }
+    })
+
+    const hasErrors = Object.keys(nextErrors).length > 0 || generalMessages.length > 0
+    setFieldErrors(nextErrors)
+    if (!hasErrors) {
+      setFormError("")
+      return true
+    }
+    if (generalMessages.length === 0 && Object.keys(nextErrors).length > 0) {
+      setFormError("Revisa los campos marcados.")
+    } else {
+      setFormError(generalMessages.join(" "))
+    }
+    return false
   }
 
   // Listas derivadas para UI (pendientes / listos)
   const nowTs = Date.now()
-  const fifteenMinMs = 15 * 60 * 1000
   const pendingCheckins = reservations.filter(r => {
     // Pendiente si aún no hizo check-in real y está cerca o pasado del horario
     if (r.realCheckInDateTime) return false
-    if (!(r.status === 'activa' || r.status === 'en_progreso')) return false
+    if (r.status !== 'activa') return false
     const until = snoozedUntil.get(r.id)
     if (until && until > nowTs) return false
-    return r.checkIn.getTime() <= nowTs + fifteenMinMs
+    return r.checkIn.getTime() <= nowTs
   })
-  const overdueCheckins = pendingCheckins.filter(r => r.checkIn.getTime() < nowTs)
+  const overdueCheckins = pendingCheckins
   const readyCheckouts = reservations.filter(r => {
     if (r.status !== 'en_progreso') return false
     const started = r.realCheckInDateTime?.getTime()
@@ -207,30 +362,17 @@ export function useReservations() {
       bedNumber: null,
     }])
     setAvailableBeds([])
+    setFieldErrors({})
+    setFormError("")
   }
 
   const addReservation = async () => {
-     // Previene doble click/guardado
     if (isSaving) {
-      console.log('Ya se está guardando, ignorando...')
+      console.log('Ya se esta guardando, ignorando...')
       return
     }
 
-    // Validaciones
-    if (!checkInDate || !checkOutDate || !checkInTime || !checkOutTime) {
-      alert("Por favor selecciona fecha y hora de check-in y check-out")
-      return
-    }
-
-    const hasAllBeds = guests.every(g => g.bedNumber !== null)
-    if (!hasAllBeds) {
-      alert("Por favor asigna una cama a cada huésped")
-      return
-    }
-
-    const phoneOk = (p: string) => (p || "").replace(/\D/g, "").length >= 7;    const hasBasicInfo = guests.every(g => g.name && g.lastName && g.dni && phoneOk(g.telefono) && (g as any).direccion)
-    if (!hasBasicInfo) {
-      alert("Por favor completa nombre, apellido, DNI y teléfono válido (mín. 7 dígitos) de cada huésped")
+    if (!validateReservationInput()) {
       return
     }
 
@@ -245,16 +387,16 @@ export function useReservations() {
     setLoading(true)
     setIsSaving(true)
     try {
-      //const created = 
       await createReservation(newReservation)
-      //setReservations(prev => [...prev, created])
-      await loadReservations() // recarga desde el mock actualizado
+      await loadReservations({ silent: true })
       try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+      try { window.dispatchEvent(new Event('reservations:futureReload')) } catch {}
+      try { window.dispatchEvent(new Event('reservations:futureReload')) } catch {}
       resetForm()
       setIsNewReservationOpen(false)
     } catch (error) {
       console.error("Error creando reserva:", error)
-      alert((error as any)?.message || "Error al crear la reserva")
+      handleFormSubmitError(error, "No se pudo crear la reserva. Intenta nuevamente.")
     } finally {
       setLoading(false)
       setIsSaving(false)
@@ -263,22 +405,12 @@ export function useReservations() {
 
   const editReservation = async () => {
     if (!editingReservationId) return
-
-    // Validaciones
-    if (!checkInDate || !checkOutDate) {
-      alert("Por favor selecciona las fechas de check-in y check-out")
+    if (isSaving) {
+      console.log('Ya se esta guardando, ignorando...')
       return
     }
 
-    const hasAllBeds = guests.every(g => g.bedNumber !== null)
-    if (!hasAllBeds) {
-      alert("Por favor asigna una cama a cada huésped")
-      return
-    }
-
-    const phoneOk = (p: string) => (p || "").replace(/\D/g, "").length >= 7;    const hasBasicInfo = guests.every(g => g.name && g.lastName && g.dni && phoneOk(g.telefono) && (g as any).direccion)
-    if (!hasBasicInfo) {
-      alert("Por favor completa nombre, apellido, DNI y teléfono válido (mín. 7 dígitos) de cada huésped")
+    if (!validateReservationInput()) {
       return
     }
 
@@ -292,45 +424,51 @@ export function useReservations() {
     }
 
     setLoading(true)
+    setIsSaving(true)
     try {
       const updated = await updateReservation(editingReservationId, updatedReservation)
       setReservations(prev => prev.map(r => r.id === editingReservationId ? updated : r))
       try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+      try { window.dispatchEvent(new Event('reservations:futureReload')) } catch {}
       resetForm()
       setIsNewReservationOpen(false)
     } catch (error) {
-      console.error("Error actualizando reserva:", error)
-      alert((error as any)?.message || "Error al actualizar la reserva")
+      console.error('Error actualizando reserva:', error)
+      handleFormSubmitError(error, "No se pudo actualizar la reserva. Intenta nuevamente.")
     } finally {
       setLoading(false)
+      setIsSaving(false)
     }
   }
 
   const removeReservation = async (id: number) => {
-    if (!confirm("¿Estás seguro de eliminar esta reserva?")) {
-      return
-    }
+    const confirmed = window.confirm("¿Estás seguro de eliminar esta reserva?")
+    if (!confirmed) return
 
     setLoading(true)
     try {
       await deleteReservation(id)
-      setReservations(prev => prev.filter(r => r.id !== id))
+      await loadReservations({ silent: true })
+      try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+      try { window.dispatchEvent(new Event('reservations:futureReload')) } catch {}
     } catch (error) {
       console.error("Error eliminando reserva:", error)
-      alert("Error al eliminar la reserva")
+      setFormError("Error al eliminar la reserva")
     } finally {
       setLoading(false)
     }
   }
-  
+
   const openEditReservation = (reservation: reservation) => {
     setIsEditMode(true)
     setEditingReservationId(reservation.id)
-    setEditingReservation(reservation)  // Guarda la reserva original
+    setEditingReservation(reservation)
+    setFieldErrors({})
+    setFormError("")
     setCheckInDate(reservation.checkIn.toISOString().split('T')[0])
     setCheckOutDate(reservation.checkOut.toISOString().split('T')[0])
-    setCheckInTime(reservation.checkIn.toTimeString().slice(0,5))
-    setCheckOutTime(reservation.checkOut.toTimeString().slice(0,5))
+    setCheckInTime(reservation.checkIn.toTimeString().slice(0, 5))
+    setCheckOutTime(reservation.checkOut.toTimeString().slice(0, 5))
     setGuestCount(reservation.guests)
     setGuests(reservation.guestDetails)
     setIsNewReservationOpen(true)
@@ -345,32 +483,55 @@ export function useReservations() {
   }
 
   const handleCheckIn = async (id: number) => {
-    const reservation = reservations.find(r => r.id === id)
-    if (!reservation) return
-
-    const now = new Date()
-    const scheduled = reservation.checkIn
-    if (now.getTime() < scheduled.getTime()) {
-      const mins = Math.max(0, Math.round((scheduled.getTime() - now.getTime()) / 60000))
-      const proceed = window.confirm(`Estás adelantando el check-in ${mins} min antes de lo programado. ¿Deseas continuar?`)
-      if (!proceed) return
-    } else {
-      if (!confirm("¿Confirmar check-in para esta reserva?")) {
-        return
+    let reservation = reservations.find((r) => r.id === id)
+    if (!reservation) {
+      try {
+        reservation = await fetchReservationById(id)
+      } catch (error) {
+        const anyErr: any = error as any
+        const msg =
+          anyErr?.response?.data?.detail ||
+          anyErr?.response?.data?.error ||
+          anyErr?.response?.data?.message ||
+          anyErr?.message ||
+          "No se pudo cargar la reserva para hacer check-in."
+        throw new Error(msg)
       }
     }
 
-    setLoading(true)
+    const now = new Date()
+    const scheduled = reservation.checkIn
+    const isEarly = now.getTime() < scheduled.getTime()
+    const minutesEarly = isEarly
+      ? Math.max(0, Math.round((scheduled.getTime() - now.getTime()) / 60000))
+      : 0
+    const earlyNotice = isEarly
+      ? {
+          reservationId: reservation.id,
+          minutesEarly,
+          scheduledAt: scheduled,
+        }
+      : null
+
     try {
       await checkInReservation(id, new Date())
-      await loadReservations()
+      await loadReservations({ silent: true })
       // Solicita refrescar estado de camas si la vista de camas está abierta
       try { window.dispatchEvent(new Event('beds:reload')) } catch {}
+      try { window.dispatchEvent(new Event('reservations:futureReload')) } catch {}
+      if (earlyNotice) {
+        setCheckInWarning(earlyNotice)
+      }
     } catch (error) {
       console.error("Error en check-in:", error)
-      alert("Error al realizar check-in")
-    } finally {
-      setLoading(false)
+      const anyErr: any = error as any
+      const msg =
+        anyErr?.response?.data?.detail ||
+        anyErr?.response?.data?.error ||
+        anyErr?.response?.data?.message ||
+        anyErr?.message ||
+        "Error al realizar check-in"
+      throw new Error(msg)
     }
   }
 
@@ -379,7 +540,7 @@ export function useReservations() {
     setLoading(true)
     try {
       await checkInReservation(id, new Date())
-      await loadReservations()
+      await loadReservations({ silent: true })
       try { window.dispatchEvent(new Event('beds:reload')) } catch {}
     } finally {
       setLoading(false)
@@ -392,7 +553,7 @@ export function useReservations() {
       for (const id of ids) {
         try { await checkInReservation(id, new Date()) } catch {}
       }
-      await loadReservations()
+      await loadReservations({ silent: true })
       try { window.dispatchEvent(new Event('beds:reload')) } catch {}
     } finally {
       setLoading(false)
@@ -403,7 +564,7 @@ export function useReservations() {
     setLoading(true)
     try {
       await noShowReservation(id)
-      await loadReservations()
+      await loadReservations({ silent: true })
       try { window.dispatchEvent(new Event('beds:reload')) } catch {}
     } finally {
       setLoading(false)
@@ -423,32 +584,19 @@ export function useReservations() {
     if (!reservation) return
 
     const now = new Date()
-    const scheduledOut = reservation.checkOut
     const realIn = reservation.realCheckInDateTime || null
     // Regla backend: estadía mínima 1h desde check-in real
     if (realIn) {
       const diffMs = now.getTime() - realIn.getTime()
       if (diffMs < 60 * 60 * 1000) {
-        alert("No se puede realizar el check-out: la estadía mínima es de 1 hora desde el check-in.")
-        return
+        throw new Error("No se puede realizar el check-out: la estadía mínima es de 1 hora desde el check-in.")
       }
     }
 
-    if (now.getTime() < scheduledOut.getTime()) {
-      const mins = Math.max(0, Math.round((scheduledOut.getTime() - now.getTime()) / 60000))
-      const proceed = window.confirm(`Estás adelantando el check-out ${mins} min antes de lo programado. ¿Deseas continuar?`)
-      if (!proceed) return
-    } else {
-      if (!confirm("¿Confirmar check-out para esta reserva?")) {
-        return
-      }
-    }
-
-    setLoading(true)
     try {
       // Deja que el backend use el "now" por defecto (sin enviar fecha)
       await checkOutReservation(id)
-      await loadReservations()
+      await loadReservations({ silent: true })
       // Tras checkout, las camas quedan PARA_LIMPIAR -> refrescar listado de camas
       try { window.dispatchEvent(new Event('beds:reload')) } catch {}
     } catch (error) {
@@ -464,52 +612,44 @@ export function useReservations() {
         }
       } catch {}
       const anyErr: any = error as any
-      const msg = anyErr?.response?.data?.error || anyErr?.response?.data?.message || anyErr?.message || 'Error al realizar check-out'
-      alert(msg)
-    } finally {
-      setLoading(false)
+      const msg =
+        anyErr?.response?.data?.detail ||
+        anyErr?.response?.data?.error ||
+        anyErr?.response?.data?.message ||
+        anyErr?.message ||
+        "Error al realizar check-out"
+      throw new Error(msg)
     }
   }
 
-  const parseLocalDateTime = (value: string): Date | null => {
-    const m = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/)
-    if (!m) return null
-    const [_, y, mo, d, h, mi] = m
-    return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi))
-  }
 
-  const handleExtendReservation = async (id: number) => {
-    const r = reservations.find(rr => rr.id === id)
-    if (!r) return
-    const input = window.prompt("Nueva fecha/hora de check-out (YYYY-MM-DD HH:MM)", `${r.checkOut.getFullYear()}-${String(r.checkOut.getMonth()+1).padStart(2,'0')}-${String(r.checkOut.getDate()).padStart(2,'0')} ${String(r.checkOut.getHours()).padStart(2,'0')}:${String(r.checkOut.getMinutes()).padStart(2,'0')}`)
-    if (!input) return
-    const newDt = parseLocalDateTime(input)
-    if (!newDt) { alert("Formato inválido. Usa YYYY-MM-DD HH:MM"); return }
-    if (newDt.getTime() <= r.checkIn.getTime()) { alert("El check-out debe ser posterior al check-in"); return }
 
-    setLoading(true)
+
+  const extendReservationStay = async (reservationId: number, newCheckOut: Date): Promise<{ ok: boolean; message?: string }> => {
     try {
-      const availability = await checkExtensionAvailability(r, newDt)
-      if (!availability.ok) {
-        const lacking = availability.unavailableBeds.join(', ')
-        const alt = availability.alternatives.slice(0, 10).join(', ')
-        const proceed = window.confirm(`Las camas actuales no están libres hasta esa fecha. No disponibles: ${lacking}.\nAlternativas: ${alt || '-'}\n\n¿Abrir edición para reasignar camas?`)
-        if (proceed) openEditReservation({ ...r, checkOut: newDt })
-        return
-      }
-      await extendReservation(id, newDt)
-      await loadReservations()
+      await extendStayRequest(reservationId, newCheckOut)
+      await loadReservations({ silent: true })
       try { window.dispatchEvent(new Event('beds:reload')) } catch {}
-      alert("Reserva extendida")
-    } catch (e) {
-      console.error("Error extendiendo reserva:", e)
-      alert("No se pudo extender la reserva")
-    } finally {
-      setLoading(false)
+      return { ok: true }
+    } catch (error) {
+      console.error("Error extendiendo estad?a:", error)
+      const err = error as any
+      const data = err?.response?.data
+      const message =
+        data?.detail ||
+        data?.nuevo_check_out ||
+        data?.check_out ||
+        data?.error ||
+        err?.message ||
+        "No se pudo extender la estad?a"
+      return { ok: false, message }
     }
   }
+
+
   return {
     reservations,
+    listError,
     isNewReservationOpen,
     setIsNewReservationOpen,
     isEditMode,
@@ -533,9 +673,9 @@ export function useReservations() {
     resetForm,
     loading,
     loadingBeds,
+    isSaving,
     handleCheckIn,
     handleCheckOut,
-    handleExtendReservation,
     pendingCheckins,
     overdueCheckins,
     readyCheckouts,
@@ -543,10 +683,12 @@ export function useReservations() {
     bulkCheckIn,
     markNoShow,
     snoozeReservation,
-    
+    extendReservationStay,
+    checkInWarning,
+    dismissCheckInWarning,
+    fieldErrors,
+    formError,
+    clearFieldError,
 
   }
 }
-
-
-
