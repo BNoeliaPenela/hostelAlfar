@@ -137,7 +137,7 @@ const CalendarPage: React.FC = () => {
       <Modal isOpen={!!selectedDay} onClose={() => setSelectedDay(null)}>
         {selectedDay && (
           <div>
-            <h2 className="text-lg font-semibold mb-2"> Detalles del {format(new Date(selectedDay.date), "dd/MM/yy")} </h2>
+            <h2 className="text-lg font-semibold mb-2"> Detalles del {format(parseISO(selectedDay.date), "dd/MM/yy")} </h2>
             <p className="mb-4"> Ocupación: {selectedDay.occupied}/{selectedDay.total} camas </p>
             {selectedDay.reservations && selectedDay.reservations.length > 0 ? (
               <div className="max-h-60 overflow-y-auto pr-6 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">

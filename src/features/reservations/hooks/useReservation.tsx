@@ -442,9 +442,6 @@ export function useReservations() {
   }
 
   const removeReservation = async (id: number) => {
-    const confirmed = window.confirm("¿Estás seguro de eliminar esta reserva?")
-    if (!confirmed) return
-
     setLoading(true)
     try {
       await deleteReservation(id)
